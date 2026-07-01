@@ -2490,10 +2490,16 @@ window.openDevModal = function() {
   document.getElementById("dv-motivo").selectedIndex = 0;
   document.getElementById("dv-codigo-info").textContent = "";
   document.getElementById("dv-stock-warning").style.display = "none";
+  // Resetear botón siempre al abrir
+  const btnDev = document.querySelector("#modal-dev .btn-danger");
+  if(btnDev) { btnDev.textContent = "↩ Confirmar Devolución"; btnDev.disabled = false; }
   document.getElementById("modal-dev").classList.add("open");
 };
 window.closeDevModal = function() {
   document.getElementById("modal-dev").classList.remove("open");
+  // Reset botón para próxima apertura
+  const btn = document.querySelector("#modal-dev .btn-danger");
+  if(btn) { btn.textContent = "↩ Confirmar Devolución"; btn.disabled = false; }
 };
 
 window.fillDevForm = function(p) {
