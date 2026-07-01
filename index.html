@@ -1279,8 +1279,10 @@ window.openStockModal=function(){
   document.getElementById("s-precio").value="";
   document.getElementById("s-tipo").selectedIndex=0;
   document.getElementById("s-codigo-info").textContent="";
-  document.getElementById("s-es-flotante").checked=false;
-  document.getElementById("s-flotante-extra").style.display="none";
+  const cbFl=document.getElementById("s-es-flotante");
+  if(cbFl) cbFl.checked=false;
+  const exFl=document.getElementById("s-flotante-extra");
+  if(exFl) exFl.style.display="none";
   // Poblar técnicos en flotante select
   const selTec=document.getElementById("s-flotante-tecnico");
   if(selTec) selTec.innerHTML=tecnicos.map(t=>`<option value="${t.nombre}">${t.nombre}</option>`).join("");
