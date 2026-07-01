@@ -2289,24 +2289,49 @@ Se eliminará del stock flotante.`)) return;
 
 window.marcarFlotanteDevueltoProveedor = async function(id, codigo, tecnico) {
   if (!confirm(`¿Marcar ${codigo} como DEVUELTO AL PROVEEDOR?
-Se descontará del stock general.`)) return;
+Se descontará del stock y quedará registro en Devoluciones.`)) return;
+
+  const fl = flotantesData[id];
+  const qty = fl?.cantidad || 1;
+
   // Descontar del stock
   const entry = Object.entries(stockData).find(([,v]) => v.codigo === codigo);
+  let stockAnterior = 0, stockNuevo = 0;
   if (entry) {
     const [key, val] = entry;
+    stockAnterior = Number(val.cantidad) || 0;
+    stockNuevo = Math.max(0, stockAnterior - qty);
     await update(ref(db, `stock/${key}`), {
-      cantidad: Math.max(0, (Number(val.cantidad)||0) - (flotantesData[id]?.cantidad||1)),
+      cantidad: stockNuevo,
       ultimoMovimiento: ahora()
     });
   }
+
+  // Actualizar estado flotante
   await update(ref(db, `flotantes/${id}`), { estado: "devuelto-proveedor", resueltaEn: ahora() });
+
+  // Crear registro en devoluciones
+  const fbEntry = Object.values(stockData).find(v => v.codigo === codigo);
+  await push(ref(db, "devoluciones"), {
+    codigo,
+    descripcion: fbEntry?.nombre || fl?.descripcion || codigo,
+    cantidad: qty,
+    proveedor: fbEntry?.proveedor || "—",
+    motivo: "Devolución desde stock flotante",
+    obs: `Devuelto por técnico: ${tecnico}`,
+    stockAnterior, stockNuevo,
+    fecha: hoy(), fechaHora: ahora(),
+    registradoPor: tecActivo || "Oficina",
+  });
+
+  // Historial
   await push(ref(db, "historial"), {
-    tipo: "flotante-dev-proveedor", codigo,
-    cantidad: flotantesData[id]?.cantidad || 1,
+    tipo: "flotante-dev-proveedor", codigo, cantidad: qty,
     descripcion: `Flotante devuelto a proveedor — ${tecnico}`,
     tecnico, fecha: hoy(), fechaHora: ahora(),
   });
-  toast(`🏭 ${codigo} devuelto al proveedor y descontado del stock`);
+
+  toast(`🏭 ${codigo} devuelto al proveedor — registro en Devoluciones creado`);
 };
 
 window.devolverABodega = async function(id, codigo, tecnico) {
