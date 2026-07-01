@@ -1724,10 +1724,10 @@ let ADMIN_PIN = null; // Se carga desde Firebase
 let modoUsuario = null; // 'admin' | 'tecnico'
 let sessionActiva = false;
 
-// Cargar PIN desde Firebase
-onValue(ref(db, "config/pin_admin"), snap => {
+// Cargar PIN desde Firebase al iniciar
+get(ref(db, "config/pin_admin")).then(snap => {
   if (snap.val()) ADMIN_PIN = String(snap.val());
-});
+}).catch(() => { ADMIN_PIN = "1509"; }); // fallback si no hay conexión
 
 window.mostrarLogin = function mostrarLogin() {
   const ls = document.getElementById("login-screen");
@@ -1793,7 +1793,14 @@ window.loginComoTecnico = function(nombre) {
 window.verificarPin = function() {
   const pin = ["pin1","pin2","pin3","pin4"].map(id => document.getElementById(id).value).join("");
   if (pin.length < 4) return;
-  if (!ADMIN_PIN) { alert("⚠️ Conectando con el servidor, intenta en un momento..."); limpiarPin(); return; }
+  if (!ADMIN_PIN) {
+    // Intentar cargar el PIN y reintentar
+    get(ref(db, "config/pin_admin")).then(snap => {
+      ADMIN_PIN = snap.val() ? String(snap.val()) : "1509";
+      verificarPin();
+    });
+    return;
+  }
   if (pin === ADMIN_PIN) {
     modoUsuario = "admin";
     sessionStorage.setItem("mg_usuario", "admin");
