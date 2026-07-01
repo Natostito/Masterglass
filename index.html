@@ -1314,7 +1314,6 @@ window.ingresarStock=async function(){
     await update(ref(db,`stock/${key}`),{cantidad:(val.cantidad||0)+qty,ultimoMovimiento:ahora()});
     toast(`✅ +${qty} unidades a ${codigo}. Stock: ${(val.cantidad||0)+qty}`);
   }else{
-    const casillero=document.getElementById("s-casillero").value.trim();
     await push(ref(db,"stock"),{codigo,nombre:desc,descripcion:desc,tipo,marca,precio,proveedor,casillero,cantidad:qty,ultimoMovimiento:ahora(),creadoEn:ahora()});
     toast(`🆕 Nuevo vidrio creado: ${codigo}`);
   }
