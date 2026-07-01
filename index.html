@@ -446,9 +446,9 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
   </div>
   <!-- Filtros -->
   <div class="filters">
-    <div class="fg"><label>Desde</label><input type="date" id="dev-desde" onchange="renderDevoluciones()" style="max-width:160px"></div>
-    <div class="fg"><label>Hasta</label><input type="date" id="dev-hasta" onchange="renderDevoluciones()" style="max-width:160px"></div>
-    <div class="fg"><label>Buscar</label><input type="text" id="dev-busq" placeholder="Código, proveedor..." oninput="renderDevoluciones()" style="max-width:220px"></div>
+    <div class="fg"><label>Desde</label><input type="date" id="dev-desde" onchange="window.renderDevoluciones&&window.renderDevoluciones()" style="max-width:160px"></div>
+    <div class="fg"><label>Hasta</label><input type="date" id="dev-hasta" onchange="window.renderDevoluciones&&window.renderDevoluciones()" style="max-width:160px"></div>
+    <div class="fg"><label>Buscar</label><input type="text" id="dev-busq" placeholder="Código, proveedor..." oninput="window.renderDevoluciones&&window.renderDevoluciones()" style="max-width:220px"></div>
     <button class="btn btn-sm" style="background:#16a34a;color:#fff;align-self:flex-end" onclick="exportarDevoluciones()">&#11015;&#65039; Exportar CSV</button>
   </div>
   <!-- KPIs devoluciones -->
@@ -927,6 +927,8 @@ function renderVista(){
   if(vista==="stock") renderStock();
   if(vista==="hist") renderHist();
   if(vista==="trabajos-hist") renderTrabajosHist();
+  if(vista==="devoluciones") renderDevoluciones();
+  if(vista==="flotantes") renderFlotantes();
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────
@@ -2332,6 +2334,8 @@ Se descontará del stock y quedará registro en Devoluciones.`)) return;
   });
 
   toast(`🏭 ${codigo} devuelto al proveedor — registro en Devoluciones creado`);
+  // Si estamos en la vista devoluciones, actualizar
+  if(vista === "devoluciones") renderDevoluciones();
 };
 
 window.devolverABodega = async function(id, codigo, tecnico) {
@@ -2508,6 +2512,7 @@ function renderDevoluciones() {
     </div>`).join("");
 }
 
+window.renderDevoluciones = renderDevoluciones;
 window.exportarDevoluciones = function() {
   const desde = document.getElementById("dev-desde").value;
   const hasta  = document.getElementById("dev-hasta").value;
