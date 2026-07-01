@@ -481,8 +481,10 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
       <select id="fl-fil-estado" onchange="renderFlotantes()" style="max-width:160px">
         <option value="">Todos</option>
         <option value="activo">Activos</option>
-        <option value="alerta">Con alerta</option>
-        <option value="devuelto">Devueltos</option>
+        <option value="alerta">Con alerta (+2 días)</option>
+        <option value="vendido">Vendidos</option>
+        <option value="devuelto-proveedor">Dev. Proveedor</option>
+        <option value="en-bodega">En Bodega</option>
       </select>
     </div>
     <div class="fg"><label>Buscar</label>
@@ -2066,6 +2068,7 @@ onValue(ref(db, "flotantes"), snap => {
 });
 
 // Poblar filtro técnico en flotantes
+window.renderFlotantes = renderFlotantes;
 function poblarFilTecFlotantes() {
   const sel = document.getElementById("fl-fil-tec");
   if (!sel) return;
