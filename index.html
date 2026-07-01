@@ -1107,6 +1107,7 @@ function renderAdmin(){
             <button class="btn btn-sm btn-danger" onclick="cambiarEstado('${t.id}','cancelado')">✕ Cancelar</button>`:""}
           <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="eliminarTrabajo('${t.id}')">🗑</button>
           <a href="${mapsUrl(t.direccion)}" target="_blank" class="btn btn-sm" style="background:#f0fdf4;color:var(--verde);text-decoration:none;">🗺️ Maps</a>
+        ${t.telefono ? `<a href="tel:${t.telefono}" class="btn btn-sm" style="background:#dcfce7;color:#166534;text-decoration:none;">📞 Llamar</a>` : ""}
         </div>
       </div>
     </div>`).join("");
@@ -1207,10 +1208,15 @@ function renderTecList(){
         ${t.estado==="en-camino"?`<button class="btn btn-sm btn-success" onclick="abrirCompletar('${t.id}')">✅ Completar</button>`:""}
         <a href="${mapsUrl(t.direccion)}" target="_blank" class="btn btn-sm" style="background:#f0fdf4;color:var(--verde);text-decoration:none;">🗺️ Maps</a>
         <a href="${wazeUrl(t.direccion)}" target="_blank" class="btn btn-sm" style="background:#e0f7ff;color:#00b3e4;text-decoration:none;">🚗 Waze</a>
+        ${t.telefono ? `<a href="tel:${t.telefono.replace(/\s+/g,'')}" class="btn btn-sm" style="background:#dcfce7;color:#166534;text-decoration:none;">📞 Llamar</a>` : ""}
       </div>
     </div>`).join("");
 }
-window.tecCambiarEstado=function(id,estado){update(ref(db,`trabajos/${id}`),{estado});};
+window.tecCambiarEstado=function(id,estado){
+  update(ref(db,`trabajos/${id}`),{estado});
+  // Re-evaluar compartir ubicación según nuevo estado
+  setTimeout(iniciarCompartirUbicacion, 500);
+};
 
 // ── COMPLETAR ─────────────────────────────────────────────────────────────
 window.abrirCompletar=function(id){
@@ -1286,6 +1292,8 @@ window.confirmarCompletar=async function(){
       trabajoId:completarId,fotoUrl});
     toast("✅ Trabajo completado y stock actualizado");
     closeCompletar();renderTecList();
+    // Re-evaluar ubicación — si no hay más trabajos en camino, dejar de compartir
+    setTimeout(iniciarCompartirUbicacion, 500);
   }catch(e){
     alert("Error: "+e.message);
     btn.textContent="✅ Confirmar y Completar";btn.disabled=false;
@@ -2873,14 +2881,32 @@ function renderListaUbicaciones() {
   }).join("");
 }
 
-// Compartir ubicación del técnico activo automáticamente
+// Compartir ubicación SOLO cuando el técnico tiene un trabajo "en-camino"
+function tieneTrabajoActivo() {
+  if (!tecActivo) return false;
+  return listaHoy().some(t => t.tecnico === tecActivo && t.estado === "en-camino");
+}
+
 function iniciarCompartirUbicacion() {
   if (!tecActivo) return;
   if (!navigator.geolocation) return;
-  if (watchId) navigator.geolocation.clearWatch(watchId);
-
+  // Solo compartir si tiene trabajo activo
+  if (!tieneTrabajoActivo()) {
+    detenerCompartirUbicacion();
+    // Limpiar ubicación anterior de Firebase para no mostrar posición vieja
+    const key = tecActivo.replace(/\s+/g, "_");
+    remove(ref(db, `ubicaciones/${key}`));
+    return;
+  }
+  if (watchId) return; // Ya está compartiendo
   watchId = navigator.geolocation.watchPosition(
     pos => {
+      if (!tieneTrabajoActivo()) {
+        detenerCompartirUbicacion();
+        const key = tecActivo.replace(/\s+/g, "_");
+        remove(ref(db, `ubicaciones/${key}`));
+        return;
+      }
       const key = tecActivo.replace(/\s+/g, "_");
       update(ref(db, `ubicaciones/${key}`), {
         lat: pos.coords.latitude,
@@ -2899,6 +2925,11 @@ function detenerCompartirUbicacion() {
   if (watchId) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
+  }
+  // Limpiar ubicación de Firebase al detener
+  if (tecActivo) {
+    const key = tecActivo.replace(/\s+/g, "_");
+    remove(ref(db, `ubicaciones/${key}`));
   }
 }
 
