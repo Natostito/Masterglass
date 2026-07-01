@@ -1282,8 +1282,6 @@ window.confirmarCompletar=async function(){
   const rut=document.getElementById("c-rut")?.value.trim()||"";
   if(docSel==="factura"&&!rut){alert("⚠️ Ingresa el RUT del cliente para emitir factura");return;}
   if(!fotoB64){alert("⚠️ Debes tomar una foto del trabajo terminado");return;}
-  const rut=document.getElementById("c-rut")?.value.trim()||"";
-  if(docSel==="factura"&&!rut){alert("⚠️ Ingresa el RUT del cliente para emitir factura");return;}
   const btn=document.getElementById("btn-confirmar");
   btn.textContent="⏳ Guardando...";btn.disabled=true;
   try{
