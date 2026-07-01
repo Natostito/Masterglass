@@ -1636,20 +1636,23 @@ function renderTrabajosHist(){
         ${t.fotoUrl
           ?`<img src="${t.fotoUrl}" class="trab-foto" onclick="abrirLightbox('${t.fotoUrl}','${t.cliente} — ${t.completadoEn||''}')" alt="foto">`
           :`<div style="font-size:.82rem;color:var(--gris);font-style:italic">Sin foto registrada</div>`}
-      ${modoUsuario === "admin" ? `
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--borde)">
-        <div style="font-size:.78rem;color:var(--gris);margin-bottom:6px;font-weight:600">⚙️ Cambiar estado (solo Admin):</div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;">
-          <button class="btn btn-sm" style="background:var(--amarillo-clar);color:var(--amarillo)" onclick="cambiarEstadoHistorial('${t.id}','pendiente')">⏳ Pendiente</button>
-          <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="cambiarEstadoHistorial('${t.id}','en-camino')">🚚 En Camino</button>
-          <button class="btn btn-sm btn-success" onclick="cambiarEstadoHistorial('${t.id}','completado')">✅ Completado</button>
-          <button class="btn btn-sm btn-danger" onclick="cambiarEstadoHistorial('${t.id}','cancelado')">✕ Cancelado</button>
-        </div>
-      </div>` : ""}
+      ${modoUsuario === "admin" ? adminEstadoBtns(t.id) : ""}
       </div>
     </div>`).join("");
 }
 // ── CAMBIAR ESTADO DESDE HISTORIAL (solo Admin) ───────────────────────────
+function adminEstadoBtns(tid) {
+  return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--borde)">
+    <div style="font-size:.78rem;color:var(--gris);margin-bottom:6px;font-weight:600">⚙️ Cambiar estado (solo Admin):</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;">
+      <button class="btn btn-sm" style="background:var(--amarillo-clar);color:var(--amarillo)" onclick="cambiarEstadoHistorial('+tid+','pendiente')">⏳ Pendiente</button>
+      <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="cambiarEstadoHistorial('+tid+','en-camino')">🚚 En Camino</button>
+      <button class="btn btn-sm btn-success" onclick="cambiarEstadoHistorial('+tid+','completado')">✅ Completado</button>
+      <button class="btn btn-sm btn-danger" onclick="cambiarEstadoHistorial('+tid+','cancelado')">✕ Cancelado</button>
+    </div>
+  </div>`;
+}
+
 window.cambiarEstadoHistorial = async function(id, nuevoEstado) {
   const t = trabajos[id];
   if (!t) return;
