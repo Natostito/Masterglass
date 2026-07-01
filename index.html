@@ -621,6 +621,22 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
       <div class="fg"><label>Casillero / Ubicación</label><input type="text" id="s-casillero" placeholder="Ej: A-12, Estante 3..."></div>
       <div class="fg"><label>Proveedor</label><input type="text" id="s-proveedor"></div>
     </div>
+    <!-- FLOTANTE -->
+    <div style="background:#fef3c7;border-radius:10px;padding:14px;border:1.5px solid #f59e0b;margin-top:12px;">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0">
+        <input type="checkbox" id="s-es-flotante" style="width:20px;height:20px;accent-color:#f59e0b;cursor:pointer" onchange="toggleFlotanteExtra(this)">
+        <div>
+          <div style="font-weight:700;color:#92400e">&#128666; Enviar directo a Stock Flotante</div>
+          <div style="font-size:.78rem;color:#b45309;margin-top:2px">El art&#237;culo seguir&#225; contando en el inventario general</div>
+        </div>
+      </label>
+      <div id="s-flotante-extra" style="display:none;margin-top:12px">
+        <div class="form-grid">
+          <div class="fg"><label>T&#233;cnico Responsable *</label><select id="s-flotante-tecnico"></select></div>
+          <div class="fg"><label>Observaciones</label><input type="text" id="s-flotante-obs" placeholder="Destino, cliente..."></div>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
       <button class="btn" style="background:#e5e7eb;color:#374151" onclick="closeStockModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="ingresarStock()">&#128230; Ingresar</button>
