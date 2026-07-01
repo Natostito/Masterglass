@@ -1720,9 +1720,14 @@ document.addEventListener("click", e => {
 });
 
 // ── SISTEMA DE LOGIN ──────────────────────────────────────────────────────
-const ADMIN_PIN = "1509";
+let ADMIN_PIN = null; // Se carga desde Firebase
 let modoUsuario = null; // 'admin' | 'tecnico'
 let sessionActiva = false;
+
+// Cargar PIN desde Firebase
+onValue(ref(db, "config/pin_admin"), snap => {
+  if (snap.val()) ADMIN_PIN = String(snap.val());
+});
 
 window.mostrarLogin = function mostrarLogin() {
   const ls = document.getElementById("login-screen");
@@ -1788,6 +1793,7 @@ window.loginComoTecnico = function(nombre) {
 window.verificarPin = function() {
   const pin = ["pin1","pin2","pin3","pin4"].map(id => document.getElementById(id).value).join("");
   if (pin.length < 4) return;
+  if (!ADMIN_PIN) { alert("⚠️ Conectando con el servidor, intenta en un momento..."); limpiarPin(); return; }
   if (pin === ADMIN_PIN) {
     modoUsuario = "admin";
     sessionStorage.setItem("mg_usuario", "admin");
