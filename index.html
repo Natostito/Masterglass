@@ -580,7 +580,15 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
           <div class="doc-btn" id="doc-factura"  onclick="selecDoc('factura')">&#129534; Factura</div>
           <div class="doc-btn" id="doc-boleta"   onclick="selecDoc('boleta')">&#128196; Boleta</div>
           <div class="doc-btn" id="doc-efectivo" onclick="selecDoc('efectivo')">&#128181; Efectivo</div>
-        </div></div>
+        </div>
+        <!-- RUT solo para factura -->
+        <div id="rut-factura-box" style="display:none;margin-top:12px;background:#eff6ff;border-radius:8px;padding:12px;border:1.5px solid #bfdbfe;">
+          <label style="font-size:.83rem;font-weight:700;color:#1d4ed8;margin-bottom:4px;display:block">&#129534; RUT del Cliente (obligatorio para factura)</label>
+          <input type="text" id="c-rut" placeholder="Ej: 12.345.678-9" style="border-color:#93c5fd"
+            oninput="formatearRut(this)">
+          <div style="font-size:.75rem;color:#6b7280;margin-top:4px">Ingresa el RUT sin puntos ni guión y se formatea solo</div>
+        </div>
+      </div>
       <div class="fg full">
         <label>Foto del Trabajo Terminado *</label>
         <input type="file" id="c-foto" accept="image/*" capture="environment" onchange="previewFoto(this)">
@@ -1096,7 +1104,7 @@ function renderAdmin(){
           <span>📱 ${t.telefono||"—"}</span>
           <span>📦 ${t.codigo||"—"}</span>
           <span>📍 ${t.direccion}</span>
-          ${t.documento?`<span>📄 ${t.documento}</span>`:""}
+          ${t.documento?`<span>📄 ${t.documento}</span>`:""} ${t.rut?`<span style="font-size:.8rem;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-weight:600">🪪 ${t.rut}</span>`:""}
         </div>
         ${t.obs?`<div style="margin-top:4px;font-size:.8rem;color:#6b7280;margin-bottom:8px">💬 ${t.obs}</div>`:""}
         ${t.fotoUrl?`<img src="${t.fotoUrl}" class="trab-foto" onclick="abrirLightbox('${t.fotoUrl}','${t.cliente}')" alt="foto">` :""}
@@ -1233,6 +1241,10 @@ window.abrirCompletar=function(id){
   document.getElementById("foto-status").textContent="";
   document.getElementById("btn-confirmar").disabled=false;
   document.getElementById("btn-confirmar").textContent="✅ Confirmar y Completar";
+  const rutBox=document.getElementById("rut-factura-box");
+  if(rutBox) rutBox.style.display="none";
+  const rutInput=document.getElementById("c-rut");
+  if(rutInput) rutInput.value="";
   document.getElementById("modal-completar").classList.add("open");
 };
 window.closeCompletar=function(){document.getElementById("modal-completar").classList.remove("open");completarId=null;};
@@ -1240,6 +1252,10 @@ window.selecDoc=function(tipo){
   docSel=tipo;
   document.querySelectorAll(".doc-btn").forEach(b=>b.classList.remove("selected"));
   document.getElementById("doc-"+tipo).classList.add("selected");
+  // Mostrar campo RUT solo si es factura
+  const rutBox = document.getElementById("rut-factura-box");
+  if(rutBox) rutBox.style.display = tipo === "factura" ? "block" : "none";
+  if(tipo !== "factura") { const rut = document.getElementById("c-rut"); if(rut) rut.value = ""; }
 };
 window.previewFoto=function(input){
   const file=input.files[0];if(!file)return;
@@ -1263,7 +1279,11 @@ window.confirmarCompletar=async function(){
   if(!servicio){alert("⚠️ Selecciona el tipo de servicio");return;}
   if(!codigoVidrio){alert("⚠️ Ingresa el código del vidrio");return;}
   if(!docSel){alert("⚠️ Selecciona el tipo de documento");return;}
+  const rut=document.getElementById("c-rut")?.value.trim()||"";
+  if(docSel==="factura"&&!rut){alert("⚠️ Ingresa el RUT del cliente para emitir factura");return;}
   if(!fotoB64){alert("⚠️ Debes tomar una foto del trabajo terminado");return;}
+  const rut=document.getElementById("c-rut")?.value.trim()||"";
+  if(docSel==="factura"&&!rut){alert("⚠️ Ingresa el RUT del cliente para emitir factura");return;}
   const btn=document.getElementById("btn-confirmar");
   btn.textContent="⏳ Guardando...";btn.disabled=true;
   try{
@@ -1284,6 +1304,7 @@ window.confirmarCompletar=async function(){
     await update(ref(db,`trabajos/${completarId}`),{
       estado:"completado",cliente,telefono,tipo:servicio,
       documento:docSel,codigoVidrio,obs,fotoUrl,
+      rut:document.getElementById("c-rut")?.value.trim()||null,
       completadoEn:ahora(),completadoPor:tecActivo
     });
     await push(ref(db,"historial"),{tipo:"salida",codigo:codigoVidrio,cantidad:1,
@@ -1660,6 +1681,22 @@ window.cambiarEstadoHistorial = async function(id, nuevoEstado) {
 
   toast(`✅ Estado cambiado a "${nuevoEstado}"`);
   renderTrabajosHist();
+};
+
+// ── FORMATO RUT ───────────────────────────────────────────────────────────
+window.formatearRut = function(input) {
+  let val = input.value.replace(/[^0-9kK]/g, "").toUpperCase();
+  if (val.length > 1) {
+    const cuerpo = val.slice(0, -1);
+    const dv = val.slice(-1);
+    // Formatear con puntos
+    let cuerpoFormateado = "";
+    for (let i = cuerpo.length - 1, j = 0; i >= 0; i--, j++) {
+      if (j > 0 && j % 3 === 0) cuerpoFormateado = "." + cuerpoFormateado;
+      cuerpoFormateado = cuerpo[i] + cuerpoFormateado;
+    }
+    input.value = cuerpoFormateado + "-" + dv;
+  }
 };
 
 window.toggleTrab=function(id){document.getElementById("tb-"+id).classList.toggle("open");};
