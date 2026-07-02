@@ -411,7 +411,10 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
 
 <!-- HISTORIAL MOVIMIENTOS -->
 <div id="view-hist" class="view">
-  <div class="section-title">&#128202; Historial de Movimientos de Stock</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div class="section-title" style="margin:0">&#128202; Historial de Movimientos de Stock</div>
+    <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generarInformeDia()">&#128203; Informe del Día</button>
+  </div>
   <div class="filters">
     <div class="fg"><label>Tipo</label>
       <select id="hist-fil-tipo" onchange="renderHist()" style="max-width:160px">
@@ -855,6 +858,25 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
       <button class="btn" style="background:#e5e7eb;color:#374151" onclick="closeDevModal()">Cancelar</button>
       <button class="btn btn-danger" onclick="confirmarDevolucion()">&#8617; Confirmar Devolución</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INFORME DEL DÍA -->
+<div class="modal-overlay" id="modal-informe">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <h2>&#128203; Informe del Día</h2>
+      <button class="close-btn" onclick="document.getElementById('modal-informe').classList.remove('open')">&#10005;</button>
+    </div>
+    <div class="fg" style="margin-bottom:12px">
+      <label>Fecha a consultar</label>
+      <input type="date" id="inf-fecha" style="max-width:180px">
+    </div>
+    <div id="informe-contenido"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn" style="background:#e5e7eb;color:#374151" onclick="document.getElementById('modal-informe').classList.remove('open')">Cerrar</button>
+      <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="exportarInformeDia()">&#11015;&#65039; Exportar CSV</button>
     </div>
   </div>
 </div>
@@ -2217,6 +2239,98 @@ onValue(ref(db, "flotantes"), snap => {
 });
 
 // Poblar filtro técnico en flotantes
+// ── INFORME DEL DÍA ───────────────────────────────────────────────────────
+window.generarInformeDia = function() {
+  document.getElementById("inf-fecha").value = hoy();
+  document.getElementById("modal-informe").classList.add("open");
+  renderInforme();
+};
+
+document.addEventListener("change", e => {
+  if(e.target.id === "inf-fecha") renderInforme();
+});
+
+function renderInforme() {
+  const fecha = document.getElementById("inf-fecha").value || hoy();
+  const movsDia = Object.values(histData).filter(h => h.fecha === fecha);
+
+  const entradas = movsDia.filter(h => h.tipo === "entrada" || h.tipo === "entrada-flotante");
+  const salidas  = movsDia.filter(h => h.tipo === "salida");
+  const devs     = movsDia.filter(h => h.tipo === "devolucion" || h.tipo === "flotante-dev-proveedor");
+  const mermas   = movsDia.filter(h => h.tipo === "merma");
+
+  // Calcular costos desde stockData
+  function getCosto(codigo) {
+    const item = Object.values(stockData).find(v => v.codigo === codigo);
+    return item?.precio || 0;
+  }
+
+  const costoEntradas = entradas.reduce((s,h) => s + ((getCosto(h.codigo)||0) * (h.cantidad||0)), 0);
+  const costoSalidas  = salidas.reduce((s,h)  => s + ((getCosto(h.codigo)||0) * (h.cantidad||0)), 0);
+  const costoDevs     = devs.reduce((s,h)     => s + ((getCosto(h.codigo)||0) * (h.cantidad||0)), 0);
+  const costoMermas   = mermas.reduce((s,h)   => s + ((getCosto(h.codigo)||0) * (h.cantidad||0)), 0);
+
+  function fmt(n) { return n ? "$" + n.toLocaleString("es-CL") : "—"; }
+  function tabla(items, cols) {
+    if(!items.length) return `<p style="color:var(--gris);font-size:.84rem;font-style:italic;padding:8px 0">Sin movimientos</p>`;
+    return `<table style="width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:4px">
+      <thead><tr>${cols.map(c=>`<th style="background:#f3f4f6;padding:6px 8px;text-align:left;border-bottom:1px solid var(--borde)">${c}</th>`).join("")}</tr></thead>
+      <tbody>${items.map(h=>`<tr>
+        <td style="padding:5px 8px;border-bottom:1px solid #f9fafb">${h.codigo||"—"}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #f9fafb">${h.descripcion||h.servicio||"—"}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #f9fafb;text-align:center">${h.cantidad||1}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #f9fafb;text-align:right">${fmt(getCosto(h.codigo)*(h.cantidad||1))}</td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+  }
+
+  document.getElementById("informe-contenido").innerHTML = `
+    <div style="background:#f0fdf4;border-radius:10px;padding:14px;margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+      <div class="kpi" style="box-shadow:none;border:1px solid #bbf7d0"><div class="num" style="font-size:1.3rem;color:var(--verde)">${fmt(costoEntradas)}</div><div class="lbl">Entradas</div></div>
+      <div class="kpi" style="box-shadow:none;border:1px solid #bfdbfe"><div class="num" style="font-size:1.3rem;color:var(--azul)">${fmt(costoSalidas)}</div><div class="lbl">Salidas</div></div>
+      <div class="kpi" style="box-shadow:none;border:1px solid #fde68a"><div class="num" style="font-size:1.3rem;color:var(--amarillo)">${fmt(costoDevs)}</div><div class="lbl">Devoluciones</div></div>
+      <div class="kpi" style="box-shadow:none;border:1px solid #fecaca"><div class="num" style="font-size:1.3rem;color:var(--rojo)">${fmt(costoMermas)}</div><div class="lbl">Mermas</div></div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-weight:700;color:var(--verde);margin-bottom:6px">📥 Entradas (${entradas.length})</div>
+      ${tabla(entradas,["Código","Descripción","Cant.","Costo"])}
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-weight:700;color:var(--azul);margin-bottom:6px">📤 Salidas (${salidas.length})</div>
+      ${tabla(salidas,["Código","Servicio","Cant.","Costo"])}
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-weight:700;color:var(--amarillo);margin-bottom:6px">↩️ Devoluciones (${devs.length})</div>
+      ${tabla(devs,["Código","Descripción","Cant.","Costo"])}
+    </div>
+    <div>
+      <div style="font-weight:700;color:var(--rojo);margin-bottom:6px">🚫 Mermas (${mermas.length})</div>
+      ${tabla(mermas,["Código","Tipo","Cant.","Costo"])}
+    </div>
+  `;
+}
+
+window.exportarInformeDia = function() {
+  const fecha = document.getElementById("inf-fecha").value || hoy();
+  const movsDia = Object.values(histData).filter(h => h.fecha === fecha);
+  function getCosto(codigo) {
+    const item = Object.values(stockData).find(v => v.codigo === codigo);
+    return item?.precio || 0;
+  }
+  const rows = [["Tipo","Código","Descripción","Cantidad","Costo Unit.","Costo Total","Técnico","Fecha/Hora"]];
+  movsDia.forEach(h => {
+    const cu = getCosto(h.codigo);
+    rows.push([h.tipo||"",h.codigo||"",h.descripcion||h.servicio||"",h.cantidad||1,cu,cu*(h.cantidad||1),h.tecnico||"",h.fechaHora||""]);
+  });
+  const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = "data:text/csv;charset=utf-8,\uFEFF"+encodeURIComponent(csv);
+  a.download = `informe_${fecha}.csv`;
+  a.click();
+  toast("✅ Informe exportado");
+};
+
 window.renderFlotantes = renderFlotantes;
 function poblarFilTecFlotantes() {
   const sel = document.getElementById("fl-fil-tec");
@@ -2362,49 +2476,64 @@ function renderFlotantes() {
     return;
   }
 
-  cont.innerHTML = items.map(fl => {
+  // Agrupar por estado
+  const grupos = {
+    activo:              { label: "🚐 En Camioneta", items: [] },
+    alerta:              { label: "🚨 Con Alerta (+2 días)", items: [] },
+    vendido:             { label: "💰 Vendidos", items: [] },
+    "devuelto-proveedor":{ label: "🏭 Devueltos al Proveedor", items: [] },
+    "en-bodega":         { label: "📦 Devueltos a Bodega", items: [] },
+  };
+
+  items.forEach(fl => {
     const dias = diasTranscurridos(fl.fecha);
     const esAlerta = fl.estado === "activo" && dias >= 2;
-    const cardClass = ["vendido","devuelto-proveedor","en-bodega"].includes(fl.estado) ? "devuelto" : esAlerta ? "alerta" : "";
-    const badgeClass = fl.estado === "vendido" ? "fl-badge-devuelto" :
-                       fl.estado === "devuelto-proveedor" ? "fl-badge-devuelto" :
-                       fl.estado === "en-bodega" ? "fl-badge-devuelto" :
-                       esAlerta ? "fl-badge-alerta" : "fl-badge-activo";
-    const badgeText = fl.estado === "vendido" ? "💰 Vendido" :
-                      fl.estado === "devuelto-proveedor" ? "🏭 Dev. Proveedor" :
-                      fl.estado === "en-bodega" ? "📦 En Bodega" :
-                      esAlerta ? `🚨 ALERTA: ${dias} días` :
-                      `🚐 ${dias === 0 ? "Hoy" : dias + " día" + (dias>1?"s":"")}`;
+    if (esAlerta) grupos.alerta.items.push(fl);
+    else if (grupos[fl.estado]) grupos[fl.estado].items.push(fl);
+  });
 
-    return `<div class="fl-card ${cardClass}">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-        <strong>${fl.codigo}</strong>
-        <span class="fl-badge ${badgeClass}">${badgeText}</span>
-        ${dias >= 2 && fl.estado === "activo" ? `<span class="dias-badge">+${dias} días</span>` : ""}
-        <span style="font-size:.78rem;color:var(--gris);margin-left:auto">${fl.fecha||"—"}</span>
-      </div>
-      <div class="job-meta">
-        <span>📦 ${fl.descripcion||"—"}</span>
-        <span>👷 ${fl.tecnico||"—"}</span>
-        <span>🔢 ${fl.cantidad} unid.</span>
-      </div>
-      ${fl.obs ? `<div style="margin-top:5px;font-size:.8rem;color:#6b7280;">💬 ${fl.obs}</div>` : ""}
-      ${fl.estado === "activo" ? `
-      <div class="job-actions" style="margin-top:10px">
-        <button class="btn btn-sm btn-success" onclick="marcarFlotanteVendido('${fl.id}','${fl.codigo}','${fl.tecnico}')">
-          💰 Vendido
-        </button>
-        <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="marcarFlotanteDevueltoProveedor('${fl.id}','${fl.codigo}','${fl.tecnico}')">
-          🏭 Dev. Proveedor
-        </button>
-        <button class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="devolverABodega('${fl.id}','${fl.codigo}','${fl.tecnico}')">
-          📦 A Bodega
-        </button>
-        <button class="btn btn-sm btn-danger" onclick="eliminarFlotante('${fl.id}')">🗑</button>
-      </div>` : ""}
-    </div>`;
-  }).join("");
+  let html = "";
+  Object.entries(grupos).forEach(([key, grupo]) => {
+    if (!grupo.items.length) return;
+    html += `<div style="margin-bottom:20px">
+      <div style="font-size:.88rem;font-weight:700;color:var(--azul-osc);margin-bottom:8px;padding:6px 12px;background:#f3f4f6;border-radius:8px;">
+        ${grupo.label} <span style="font-weight:400;color:var(--gris)">(${grupo.items.length})</span>
+      </div>`;
+    grupo.items.forEach(fl => {
+      const dias = diasTranscurridos(fl.fecha);
+      const esAlerta = key === "alerta";
+      const cardClass = ["vendido","devuelto-proveedor","en-bodega"].includes(fl.estado) ? "devuelto" : esAlerta ? "alerta" : "";
+      const badgeClass = fl.estado==="vendido" ? "fl-badge-devuelto" : fl.estado==="devuelto-proveedor" ? "fl-badge-devuelto" : fl.estado==="en-bodega" ? "fl-badge-devuelto" : esAlerta ? "fl-badge-alerta" : "fl-badge-activo";
+      const badgeText = fl.estado==="vendido" ? "💰 Vendido" : fl.estado==="devuelto-proveedor" ? "🏭 Dev. Proveedor" : fl.estado==="en-bodega" ? "📦 En Bodega" : esAlerta ? `🚨 ALERTA: ${dias} días` : `🚐 ${dias===0?"Hoy":dias+" día"+(dias>1?"s":"")}`;
+      html += `<div class="fl-card ${cardClass}">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <strong>${fl.codigo}</strong>
+          <span class="fl-badge ${badgeClass}">${badgeText}</span>
+          ${dias>=2&&fl.estado==="activo"?`<span class="dias-badge">+${dias} días</span>`:""}
+          <span style="font-size:.78rem;color:var(--gris);margin-left:auto">${fl.fecha||"—"}</span>
+        </div>
+        <div class="job-meta">
+          <span>📦 ${fl.descripcion||"—"}</span>
+          <span>👷 ${fl.tecnico||"—"}</span>
+          <span>🔢 ${fl.cantidad} unid.</span>
+          ${fl.resueltaEn?`<span>✅ ${fl.resueltaEn}</span>`:""}
+        </div>
+        ${fl.obs?`<div style="margin-top:5px;font-size:.8rem;color:#6b7280;">💬 ${fl.obs}</div>`:""}
+        ${fl.estado==="activo"?`
+        <div class="job-actions" style="margin-top:10px">
+          <button class="btn btn-sm btn-success" onclick="marcarFlotanteVendido('${fl.id}','${fl.codigo}','${fl.tecnico}')">💰 Vendido</button>
+          <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="marcarFlotanteDevueltoProveedor('${fl.id}','${fl.codigo}','${fl.tecnico}')">🏭 Dev. Proveedor</button>
+          <button class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="devolverABodega('${fl.id}','${fl.codigo}','${fl.tecnico}')">📦 A Bodega</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarFlotante('${fl.id}')">🗑</button>
+        </div>`:""}
+      </div>`;
+    });
+    html += "</div>";
+  });
+
+  cont.innerHTML = html || `<div class="empty"><div class="icon">🚐</div>No hay artículos flotantes.</div>`;
 }
+
 
 window.marcarFlotanteVendido = async function(id, codigo, tecnico) {
   if (!confirm(`¿Marcar ${codigo} como VENDIDO?
