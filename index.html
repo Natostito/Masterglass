@@ -952,7 +952,10 @@ function hoy(){return new Date().toISOString().slice(0,10);}
 function ahora(){return new Date().toLocaleString("es-CL");}
 function listaHoy(){
   return Object.entries(trabajos).filter(([,t])=>t.fecha===hoy())
-    .map(([id,t])=>({...t,id})).sort((a,b)=>(a.hora||"").localeCompare(b.hora||""));
+    .map(([id,t])=>({...t,id})).sort((a,b)=>{
+      if(a.hora&&b.hora) return a.hora.localeCompare(b.hora);
+      return String(b.creadoEn||0).localeCompare(String(a.creadoEn||0));
+    });
 }
 function mapsUrl(d){return`https://maps.google.com/?q=${encodeURIComponent(d+", Santiago, Chile")}`;}
 function wazeUrl(d){return`https://waze.com/ul?q=${encodeURIComponent(d+", Santiago, Chile")}&navigate=yes`;}
@@ -1629,6 +1632,8 @@ function renderTrabajosHist(){
           <span>📦 ${t.codigoVidrio||t.codigo||"—"}</span>
           <span>👷 ${t.completadoPor||t.tecnico||"—"}</span>
           <span>📍 ${t.direccion||"—"}</span>
+          ${t.documento?`<span>📄 ${t.documento}</span>`:""}
+          ${t.rut?`<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-weight:600">🪪 RUT: ${t.rut}</span>`:""}
         </div>
         ${t.obs?`<div style="font-size:.82rem;color:#6b7280;margin-bottom:8px">💬 ${t.obs}</div>`:""}
         ${t.fotoUrl
@@ -1937,7 +1942,7 @@ window.pinKey = function(event, current, prevId, nextId) {
 
 function actualizarMenuSegunModo() {
   // Técnicos solo ven su vista, mapa y ubicaciones
-  const soloAdmin = ["nav-admin","nav-stock","nav-hist","nav-trabajos-hist","nav-config","nav-devoluciones"];
+  const soloAdmin = ["nav-admin","nav-stock","nav-hist","nav-trabajos-hist","nav-config","nav-devoluciones","nav-flotantes"];
   const soloTec   = ["nav-tec"];
   if (modoUsuario === "tecnico") {
     soloAdmin.forEach(id => {
