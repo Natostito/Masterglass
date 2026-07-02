@@ -2537,15 +2537,25 @@ function renderFlotantes() {
 
 window.marcarFlotanteVendido = async function(id, codigo, tecnico) {
   if (!confirm(`¿Marcar ${codigo} como VENDIDO?
-Se eliminará del stock flotante.`)) return;
+Se descontará del inventario general.`)) return;
+  const fl = flotantesData[id];
+  const qty = fl?.cantidad || 1;
+  // Descontar del stock general
+  const entry = Object.entries(stockData).find(([,v]) => v.codigo === codigo);
+  let stockAnterior = 0, stockNuevo = 0;
+  if (entry) {
+    const [key, val] = entry;
+    stockAnterior = Number(val.cantidad) || 0;
+    stockNuevo = Math.max(0, stockAnterior - qty);
+    await update(ref(db, `stock/${key}`), { cantidad: stockNuevo, ultimoMovimiento: ahora() });
+  }
   await update(ref(db, `flotantes/${id}`), { estado: "vendido", resueltaEn: ahora() });
   await push(ref(db, "historial"), {
-    tipo: "flotante-vendido", codigo,
-    cantidad: flotantesData[id]?.cantidad || 1,
-    descripcion: `Flotante vendido — ${tecnico}`,
+    tipo: "flotante-vendido", codigo, cantidad: qty,
+    descripcion: `Flotante vendido — ${tecnico} (Stock: ${stockAnterior}→${stockNuevo})`,
     tecnico, fecha: hoy(), fechaHora: ahora(),
   });
-  toast(`💰 ${codigo} marcado como vendido`);
+  toast(`💰 ${codigo} vendido — Stock actualizado: ${stockAnterior}→${stockNuevo}`);
 };
 
 window.marcarFlotanteDevueltoProveedor = async function(id, codigo, tecnico) {
