@@ -1264,10 +1264,25 @@ window.previewFoto=function(input){
   const file=input.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=e=>{
-    fotoB64=e.target.result;
-    const prev=document.getElementById("foto-preview");
-    prev.src=fotoB64;prev.style.display="block";
-    document.getElementById("foto-status").textContent=`✅ Foto lista (${(file.size/1024).toFixed(0)} KB)`;
+    // Comprimir imagen antes de guardar
+    const img=new Image();
+    img.onload=()=>{
+      const canvas=document.createElement("canvas");
+      const MAX=1200; // max dimension
+      let w=img.width,h=img.height;
+      if(w>MAX||h>MAX){
+        if(w>h){h=Math.round(h*MAX/w);w=MAX;}
+        else{w=Math.round(w*MAX/h);h=MAX;}
+      }
+      canvas.width=w;canvas.height=h;
+      canvas.getContext("2d").drawImage(img,0,0,w,h);
+      fotoB64=canvas.toDataURL("image/jpeg",0.75); // 75% calidad
+      const prev=document.getElementById("foto-preview");
+      prev.src=fotoB64;prev.style.display="block";
+      const kb=Math.round(fotoB64.length*0.75/1024);
+      document.getElementById("foto-status").textContent=`✅ Foto lista (~${kb} KB comprimida)`;
+    };
+    img.src=e.target.result;
   };
   reader.readAsDataURL(file);
 };
@@ -1288,20 +1303,22 @@ window.confirmarCompletar=async function(){
   const btn=document.getElementById("btn-confirmar");
   btn.textContent="⏳ Guardando...";btn.disabled=true;
   try{
+    // Ejecutar subida de foto y descuento de stock en paralelo
     let fotoUrl=fotoB64;
-    try{
-      const fr=sRef(storage,`fotos/${completarId}_${Date.now()}.jpg`);
-      await uploadString(fr,fotoB64,"data_url");
-      fotoUrl=await getDownloadURL(fr);
-    }catch(e){console.warn("Storage:",e.message);}
-    // Descontar stock
-    const snap=await get(ref(db,"stock"));
-    const st=snap.val()||{};
-    const entry=Object.entries(st).find(([,v])=>v.codigo===codigoVidrio);
-    if(entry){
-      const [key,val]=entry;
-      await update(ref(db,`stock/${key}`),{cantidad:Math.max(0,(val.cantidad||0)-1),ultimoMovimiento:ahora()});
-    }
+    const stockEntry=Object.entries(stockData).find(([,v])=>v.codigo===codigoVidrio);
+    const [fotoResult] = await Promise.allSettled([
+      // Subir foto
+      (async()=>{
+        const fr=sRef(storage,`fotos/${completarId}_${Date.now()}.jpg`);
+        await uploadString(fr,fotoB64,"data_url");
+        fotoUrl=await getDownloadURL(fr);
+      })(),
+      // Descontar stock en paralelo
+      stockEntry
+        ? update(ref(db,`stock/${stockEntry[0]}`),{cantidad:Math.max(0,(stockEntry[1].cantidad||0)-1),ultimoMovimiento:ahora()})
+        : Promise.resolve()
+    ]);
+    if(fotoResult.status==="rejected") console.warn("Storage:",fotoResult.reason);
     await update(ref(db,`trabajos/${completarId}`),{
       estado:"completado",cliente,telefono,tipo:servicio,
       documento:docSel,codigoVidrio,obs,fotoUrl,
