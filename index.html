@@ -476,12 +476,12 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
   <!-- Filtros -->
   <div class="filters">
     <div class="fg"><label>Técnico</label>
-      <select id="fl-fil-tec" style="max-width:180px">
+      <select id="fl-fil-tec" onchange="if(window.renderFlotantes)window.renderFlotantes()" style="max-width:180px">
         <option value="">Todos</option>
       </select>
     </div>
     <div class="fg"><label>Estado</label>
-      <select id="fl-fil-estado" style="max-width:160px">
+      <select id="fl-fil-estado" onchange="if(window.renderFlotantes)window.renderFlotantes()" style="max-width:160px">
         <option value="">Todos</option>
         <option value="activo">Activos</option>
         <option value="alerta">Con alerta (+2 días)</option>
@@ -491,7 +491,7 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
       </select>
     </div>
     <div class="fg"><label>Buscar</label>
-      <input type="text" id="fl-busq" placeholder="Código, técnico..." style="max-width:220px">
+      <input type="text" id="fl-busq" placeholder="Código, técnico..." oninput="if(window.renderFlotantes)window.renderFlotantes()" style="max-width:220px">
     </div>
   </div>
 
