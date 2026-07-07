@@ -476,12 +476,12 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
   <!-- Filtros -->
   <div class="filters">
     <div class="fg"><label>Técnico</label>
-      <select id="fl-fil-tec" onchange="renderFlotantes()" style="max-width:180px">
+      <select id="fl-fil-tec" style="max-width:180px">
         <option value="">Todos</option>
       </select>
     </div>
     <div class="fg"><label>Estado</label>
-      <select id="fl-fil-estado" onchange="renderFlotantes()" style="max-width:160px">
+      <select id="fl-fil-estado" style="max-width:160px">
         <option value="">Todos</option>
         <option value="activo">Activos</option>
         <option value="alerta">Con alerta (+2 días)</option>
@@ -491,7 +491,7 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
       </select>
     </div>
     <div class="fg"><label>Buscar</label>
-      <input type="text" id="fl-busq" placeholder="Código, técnico..." oninput="renderFlotantes()" style="max-width:220px">
+      <input type="text" id="fl-busq" placeholder="Código, técnico..." style="max-width:220px">
     </div>
   </div>
 
@@ -995,6 +995,7 @@ window.showView=function(v){
   renderVista();
   // Secciones especiales
   if(v==="ubicaciones"){setTimeout(initMapaTecnicos,100);renderListaUbicaciones();}
+  if(v==="flotantes") setTimeout(setupFlotantesListeners,100);
   if(v==="stock") setTimeout(renderMermas,300);
 };
 function renderVista(){
@@ -2470,6 +2471,20 @@ function checkAlertasFlotantes() {
       : `&#128666; Flotantes`;
   }
 }
+
+// Add event listeners for flotantes search - inside module scope
+function setupFlotantesListeners() {
+  const busqEl = document.getElementById("fl-busq");
+  const tecEl  = document.getElementById("fl-fil-tec");
+  const estEl  = document.getElementById("fl-fil-estado");
+  if(busqEl) busqEl.addEventListener("input",  renderFlotantes);
+  if(tecEl)  tecEl.addEventListener("change",  renderFlotantes);
+  if(estEl)  estEl.addEventListener("change",  renderFlotantes);
+}
+// Call after DOM ready
+document.addEventListener("DOMContentLoaded", setupFlotantesListeners);
+// Also call when flotantes view is shown
+setTimeout(setupFlotantesListeners, 2000);
 
 window.renderFlotantes = function renderFlotantes() {
   poblarFilTecFlotantes();
