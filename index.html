@@ -476,12 +476,12 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
   <!-- Filtros -->
   <div class="filters">
     <div class="fg"><label>Técnico</label>
-      <select id="fl-fil-tec" onchange="renderFlotantes()" style="max-width:180px">
+      <select id="fl-fil-tec" onchange="window.renderFlotantes&&window.renderFlotantes()" style="max-width:180px">
         <option value="">Todos</option>
       </select>
     </div>
     <div class="fg"><label>Estado</label>
-      <select id="fl-fil-estado" onchange="renderFlotantes()" style="max-width:160px">
+      <select id="fl-fil-estado" onchange="window.renderFlotantes&&window.renderFlotantes()" style="max-width:160px">
         <option value="">Todos</option>
         <option value="activo">Activos</option>
         <option value="alerta">Con alerta (+2 días)</option>
@@ -491,7 +491,7 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
       </select>
     </div>
     <div class="fg"><label>Buscar</label>
-      <input type="text" id="fl-busq" placeholder="Código, técnico..." oninput="renderFlotantes()" style="max-width:220px">
+      <input type="text" id="fl-busq" placeholder="Código, técnico..." oninput="window.renderFlotantes&&window.renderFlotantes()" style="max-width:220px">
     </div>
   </div>
 
@@ -2485,12 +2485,12 @@ function renderFlotantes() {
   if (busq) items = items.filter(f =>
     (f.codigo + f.descripcion + f.tecnico).toLowerCase().includes(busq));
 
-  // ── KPIs ──────────────────────────────────────────────────────────────
-  const activos   = Object.values(flotantesData).filter(f => f.estado === "activo").length;
-  const alertas   = Object.values(flotantesData).filter(f => f.estado === "activo" && diasTranscurridos(f.fecha) >= 2).length;
-  const vendidos  = Object.values(flotantesData).filter(f => f.estado === "vendido").length;
-  const devProv   = Object.values(flotantesData).filter(f => f.estado === "devuelto-proveedor").length;
-  const enBodega  = Object.values(flotantesData).filter(f => f.estado === "en-bodega").length;
+  // ── KPIs — usar items filtrados ──────────────────────────────────────
+  const activos   = items.filter(f => f.estado === "activo" && diasTranscurridos(f.fecha) < 2).length;
+  const alertas   = items.filter(f => f.estado === "activo" && diasTranscurridos(f.fecha) >= 2).length;
+  const vendidos  = items.filter(f => f.estado === "vendido").length;
+  const devProv   = items.filter(f => f.estado === "devuelto-proveedor").length;
+  const enBodega  = items.filter(f => f.estado === "en-bodega").length;
   document.getElementById("flotantes-kpis").innerHTML = `
     <div class="kpi"><div class="num" style="color:var(--amarillo)">${activos}</div><div class="lbl">En camioneta</div></div>
     <div class="kpi"><div class="num" style="color:var(--rojo)">${alertas}</div><div class="lbl">Con alerta (+2 días)</div></div>
