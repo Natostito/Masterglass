@@ -983,12 +983,19 @@ window.showView=function(v){
   vista=v;
   document.querySelectorAll(".view").forEach(el=>el.classList.remove("active"));
   document.querySelectorAll("nav button").forEach(el=>el.classList.remove("active"));
-  document.getElementById("view-"+v).classList.add("active");
-  document.getElementById("nav-"+v).classList.add("active");
-  // Cerrar menú al navegar en móvil
-  document.getElementById("side-menu").classList.remove("open");
-  document.getElementById("menu-overlay").classList.remove("open");
+  const viewEl=document.getElementById("view-"+v);
+  const navEl=document.getElementById("nav-"+v);
+  if(viewEl) viewEl.classList.add("active");
+  if(navEl) navEl.classList.add("active");
+  // Cerrar menú móvil
+  const sm=document.getElementById("side-menu");
+  const mo=document.getElementById("menu-overlay");
+  if(sm) sm.classList.remove("open");
+  if(mo) mo.classList.remove("open");
   renderVista();
+  // Secciones especiales
+  if(v==="ubicaciones"){setTimeout(initMapaTecnicos,100);renderListaUbicaciones();}
+  if(v==="stock") setTimeout(renderMermas,300);
 };
 function renderVista(){
   if(vista==="admin") renderAdmin();
@@ -999,6 +1006,7 @@ function renderVista(){
   if(vista==="trabajos-hist") renderTrabajosHist();
   if(vista==="devoluciones") renderDevoluciones();
   if(vista==="flotantes") renderFlotantes();
+  if(vista==="ubicaciones") renderListaUbicaciones();
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────
@@ -2272,11 +2280,7 @@ window.exportarMermas = function() {
 };
 
 // Re-render mermas when stock view is shown
-const _origShowView4 = window.showView;
-window.showView = function(v) {
-  _origShowView4(v);
-  if (v === "stock") setTimeout(renderMermas, 300);
-};
+// stock render handled in renderVista
 
 // ── STOCK FLOTANTE ────────────────────────────────────────────────────────
 let flotantesData = {};
@@ -2739,13 +2743,7 @@ window.eliminarFlotante = async function(id) {
 };
 
 // Override showView para renderizar flotantes y checkear alertas
-const _origShowView3 = window.showView;
-window.showView = function(v) {
-  _origShowView3(v);
-  if (v === "flotantes") {
-    renderFlotantes();
-  }
-};
+// flotantes in renderVista
 
 // Check alertas cada 5 minutos mientras la app está abierta
 setInterval(checkAlertasFlotantes, 5 * 60 * 1000);
@@ -3311,14 +3309,7 @@ window.salirTecnico = function() {
 };
 
 // Override showView para iniciar mapa al entrar a ubicaciones
-const _origShowView2 = window.showView;
-window.showView = function(v) {
-  _origShowView2(v);
-  if (v === "ubicaciones") {
-    setTimeout(initMapaTecnicos, 100);
-    renderListaUbicaciones();
-  }
-};
+// ubicaciones in showView
 
 // ── GOOGLE PLACES AUTOCOMPLETE ────────────────────────────────────────────
 function initAutocomplete(){
