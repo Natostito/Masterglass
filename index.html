@@ -473,15 +473,17 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
   <!-- KPIs -->
   <div class="kpis" id="flotantes-kpis" style="margin-bottom:16px"></div>
 
-  <!-- Filtros -->
-  <div class="filters">
-    <div class="fg"><label>Técnico</label>
-      <select id="fl-fil-tec" onchange="flSearch()" style="max-width:180px">
+  <!-- Filtros Flotantes -->
+  <div class="filters" id="fl-filters">
+    <div class="fg">
+      <label>Técnico</label>
+      <select id="fl-fil-tec" style="max-width:180px">
         <option value="">Todos</option>
       </select>
     </div>
-    <div class="fg"><label>Estado</label>
-      <select id="fl-fil-estado" onchange="flSearch()" style="max-width:160px">
+    <div class="fg">
+      <label>Estado</label>
+      <select id="fl-fil-estado" style="max-width:160px">
         <option value="">Todos</option>
         <option value="activo">Activos</option>
         <option value="alerta">Con alerta (+2 días)</option>
@@ -490,8 +492,9 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
         <option value="en-bodega">En Bodega</option>
       </select>
     </div>
-    <div class="fg"><label>Buscar</label>
-      <input type="text" id="fl-busq" placeholder="Código, técnico..." oninput="flSearch()" style="max-width:220px">
+    <div class="fg">
+      <label>Buscar</label>
+      <input type="text" id="fl-busq" placeholder="Código, técnico...">
     </div>
   </div>
 
@@ -995,7 +998,6 @@ window.showView=function(v){
   renderVista();
   // Secciones especiales
   if(v==="ubicaciones"){setTimeout(initMapaTecnicos,100);renderListaUbicaciones();}
-  if(v==="flotantes") setTimeout(setupFlotantesListeners,100);
   if(v==="stock") setTimeout(renderMermas,300);
 };
 function renderVista(){
@@ -2472,20 +2474,6 @@ function checkAlertasFlotantes() {
   }
 }
 
-// Add event listeners for flotantes search - inside module scope
-function setupFlotantesListeners() {
-  const busqEl = document.getElementById("fl-busq");
-  const tecEl  = document.getElementById("fl-fil-tec");
-  const estEl  = document.getElementById("fl-fil-estado");
-  if(busqEl) busqEl.addEventListener("input",  renderFlotantes);
-  if(tecEl)  tecEl.addEventListener("change",  renderFlotantes);
-  if(estEl)  estEl.addEventListener("change",  renderFlotantes);
-}
-// Call after DOM ready
-document.addEventListener("DOMContentLoaded", setupFlotantesListeners);
-// Also call when flotantes view is shown
-setTimeout(setupFlotantesListeners, 2000);
-
 window.renderFlotantes = function renderFlotantes() {
   poblarFilTecFlotantes();
   const filTec    = document.getElementById("fl-fil-tec").value;
@@ -3405,14 +3393,22 @@ window.borrarTodoElStock=async function(){
   toast(`✅ ${count} productos eliminados del inventario`);
 };
 
-</script>
-<script>
-// Proxy para buscador flotantes - funciona desde HTML onclick
-function flSearch() {
-  if (typeof window.renderFlotantes === 'function') {
-    window.renderFlotantes();
+
+// ── FLOTANTES SEARCH LISTENERS ────────────────────────────────────────────
+(function attachFL() {
+  function bind() {
+    const b=document.getElementById("fl-busq");
+    const t=document.getElementById("fl-fil-tec");
+    const e=document.getElementById("fl-fil-estado");
+    if(b&&!b._ok){b.addEventListener("input",renderFlotantes);b._ok=1;}
+    if(t&&!t._ok){t.addEventListener("change",renderFlotantes);t._ok=1;}
+    if(e&&!e._ok){e.addEventListener("change",renderFlotantes);e._ok=1;}
   }
-}
+  document.addEventListener("DOMContentLoaded", bind);
+  const _sv = window.showView;
+  window.showView = function(v){ _sv(v); if(v==="flotantes") setTimeout(bind, 100); };
+})();
 </script>
+
 </body>
 </html>
