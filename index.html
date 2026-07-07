@@ -3394,21 +3394,38 @@ window.borrarTodoElStock=async function(){
 };
 
 
-// ── FLOTANTES SEARCH LISTENERS ────────────────────────────────────────────
-(function attachFL() {
-  function bind() {
-    const b=document.getElementById("fl-busq");
-    const t=document.getElementById("fl-fil-tec");
-    const e=document.getElementById("fl-fil-estado");
-    if(b&&!b._ok){b.addEventListener("input",renderFlotantes);b._ok=1;}
-    if(t&&!t._ok){t.addEventListener("change",renderFlotantes);t._ok=1;}
-    if(e&&!e._ok){e.addEventListener("change",renderFlotantes);e._ok=1;}
-  }
-  document.addEventListener("DOMContentLoaded", bind);
-  const _sv = window.showView;
-  window.showView = function(v){ _sv(v); if(v==="flotantes") setTimeout(bind, 100); };
-})();
 </script>
 
+<script>
+// Flotantes search - plain script, no module issues
+(function() {
+  var attached = false;
+  function tryAttach() {
+    if (attached) return;
+    var b = document.getElementById('fl-busq');
+    var t = document.getElementById('fl-fil-tec');
+    var e = document.getElementById('fl-fil-estado');
+    if (!b || !t || !e) return;
+    function doFilter() {
+      var rf = window.renderFlotantes;
+      if (typeof rf === 'function') rf();
+    }
+    b.addEventListener('input', doFilter);
+    t.addEventListener('change', doFilter);
+    e.addEventListener('change', doFilter);
+    attached = true;
+    console.log('Flotantes search listeners attached');
+  }
+  // Try every 500ms until elements exist and are visible
+  var interval = setInterval(function() {
+    var view = document.getElementById('view-flotantes');
+    if (view && view.classList.contains('active')) {
+      tryAttach();
+    } else {
+      attached = false; // reset when view is not active
+    }
+  }, 500);
+})();
+</script>
 </body>
 </html>
