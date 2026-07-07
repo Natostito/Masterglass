@@ -1001,6 +1001,8 @@ function buscarItems(q){
       marca:v.marca||"",
       categoria:v.tipo||v.categoria||"",
       casillero:v.casillero||"",
+      precio:v.precio||0,
+      proveedor:v.proveedor||"",
       enFirebase:true
     }));
   // Catálogo local solo para los que no están en Firebase
@@ -1082,7 +1084,18 @@ window.fillStockForm=function(p){
   document.getElementById("s-desc").value=p.nombre||"";
   document.getElementById("s-tipo").value=p.categoria||"";
   document.getElementById("s-marca").value=p.marca||"";
-  if(p.precio) document.getElementById("s-precio").value=p.precio;
+  // Buscar datos completos en Firebase por si tiene precio guardado
+  const fbEntry=Object.values(stockData).find(v=>v.codigo===p.codigo);
+  const precio=fbEntry?.precio||p.precio||0;
+  if(precio) document.getElementById("s-precio").value=precio;
+  if(fbEntry?.proveedor) document.getElementById("s-proveedor").value=fbEntry.proveedor;
+  if(fbEntry?.casillero) document.getElementById("s-casillero").value=fbEntry.casillero;
+  // Mostrar info del stock actual
+  const infoEl=document.getElementById("s-codigo-info");
+  if(infoEl&&fbEntry){
+    const qty=Number(fbEntry.cantidad)||0;
+    infoEl.innerHTML=`<span style="color:var(--verde);font-weight:600">✅ Producto existente — Stock actual: <strong>${qty}</strong> unidades${precio?` · Precio: $${Number(precio).toLocaleString("es-CL")}`:""}`;
+  }
 };
 
 document.addEventListener("click",e=>{
