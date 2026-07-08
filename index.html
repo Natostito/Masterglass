@@ -2676,6 +2676,33 @@ Se descontará del stock y quedará registro en Devoluciones.`)) return;
 };
 
 let bodegaFlotanteId = null;
+let mermaFlotanteId = null; // referencia al flotante en curso, si la merma viene de esa sección
+
+window.marcarFlotanteMerma = function(id, codigo, tecnico) {
+  const fl = flotantesData[id];
+  mermaFlotanteId = id;
+  ["mr-codigo","mr-desc","mr-detalle"].forEach(fid => { const el=document.getElementById(fid); if(el) el.value=""; });
+  document.getElementById("mr-qty").value = fl?.cantidad || 1;
+  document.getElementById("mr-precio").value = "";
+  document.getElementById("mr-fecha").value = hoy();
+  document.getElementById("mr-tipo").selectedIndex = 0;
+  document.getElementById("mr-codigo-info").textContent = "";
+  document.getElementById("mr-stock-info").style.display = "none";
+  document.getElementById("mr-codigo").value = codigo;
+  document.getElementById("mr-desc").value = fl?.descripcion || "";
+  document.getElementById("mr-responsable").innerHTML =
+    '<option value="">— Selecciona —</option>' +
+    tecnicos.map(t => `<option value="${t.nombre}">${t.nombre}</option>`).join("") +
+    '<option value="Bodega/Oficina">Bodega / Oficina</option>';
+  document.getElementById("mr-responsable").value = tecnico || "";
+  const fbEntry = Object.values(stockData).find(v => v.codigo === codigo);
+  const stockActual = fbEntry ? Number(fbEntry.cantidad)||0 : 0;
+  const info = document.getElementById("mr-stock-info");
+  info.textContent = `Stock actual: ${stockActual} unidades`;
+  info.style.background = "#f0fdf4"; info.style.color = "var(--verde)";
+  info.style.display = "block";
+  document.getElementById("modal-merma").classList.add("open");
+};
 
 window.devolverABodega = function(id, codigo, tecnico) {
   bodegaFlotanteId = id;
