@@ -3426,6 +3426,7 @@ window.borrarTodoElStock=async function(){
   }
 
   function render() {
+   try {
     var data = window.__flotantesData || {};
     var busqEl = document.getElementById('fl-busq');
     var tecEl  = document.getElementById('fl-fil-tec');
@@ -3433,7 +3434,7 @@ window.borrarTodoElStock=async function(){
     var cont   = document.getElementById('flotantes-list');
     if (!cont || !busqEl || !tecEl || !estEl) return; // vista no está visible aún
 
-    var busq = (busqEl.value || '').toLowerCase();
+    var busq = String(busqEl.value || '').toLowerCase().trim();
     var filTec = tecEl.value;
     var filEstado = estEl.value;
 
@@ -3458,7 +3459,8 @@ window.borrarTodoElStock=async function(){
     }
     if (busq) {
       items = items.filter(function(f) {
-        return (f.codigo + f.descripcion + f.tecnico).toLowerCase().indexOf(busq) !== -1;
+        var texto = (String(f.codigo||'') + ' ' + String(f.descripcion||'') + ' ' + String(f.tecnico||'')).toLowerCase();
+        return texto.indexOf(busq) !== -1;
       });
     }
 
@@ -3537,6 +3539,10 @@ window.borrarTodoElStock=async function(){
       html += '</div>';
     });
     cont.innerHTML = html;
+   } catch(err) {
+     console.error('Error en buscador de flotantes:', err);
+     // No borramos el contenido existente si algo falla
+   }
   }
 
   window.__flRenderIndependiente = render;
