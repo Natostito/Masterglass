@@ -2,6 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="theme-color" content="#1e3a5f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -974,8 +977,10 @@ onValue(ref(db,"tecnicos"),snap=>{
   if(d) tecnicos=Object.entries(d).map(([id,v])=>({id,nombre:v.nombre}));
   else ["Carlos Muñoz","Pedro Rojas","Luis Herrera","Jorge Vidal","Andrés Silva","Miguel Torres"]
     .forEach(nombre=>push(ref(db,"tecnicos"),{nombre}));
+  window.__tecnicos = tecnicos; // espejo para script independiente
   renderTecFiltro();renderTecSelector();renderTecConfigList();renderTHFiltro();
   if(tecActivo) renderTecList();
+  if (window.__flRenderIndependiente) window.__flRenderIndependiente();
 });
 onValue(ref(db,"trabajos"),snap=>{trabajos=snap.val()||{};renderVista();});
 onValue(ref(db,"stock"),snap=>{stockData=snap.val()||{};if(vista==="stock")renderStock();});
@@ -2113,6 +2118,7 @@ onValue(ref(db, "mermas"), snap => {
 });
 
 window.openMermaModal = function() {
+  mermaFlotanteId = null; // abrir desde Stock, no desde Flotante
   ["mr-codigo","mr-desc","mr-detalle"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("mr-qty").value = "1";
   document.getElementById("mr-precio").value = "";
@@ -2198,6 +2204,11 @@ window.confirmarMerma = async function() {
       tecnico: responsable, fecha, fechaHora: ahora(),
     });
 
+    // Si la merma vino desde un flotante, marcarlo como resuelto
+    if (mermaFlotanteId) {
+      await update(ref(db, `flotantes/${mermaFlotanteId}`), { estado: "merma", resueltaEn: ahora() });
+      mermaFlotanteId = null;
+    }
     toast(`✅ Merma registrada — Stock ${codigo}: ${stockAnterior} → ${stockNuevo}`);
     closeMermaModal();
     renderMermas();
@@ -2538,6 +2549,7 @@ window.renderFlotantes = function renderFlotantes() {
     vendido:             { label: "💰 Vendidos", items: [] },
     "devuelto-proveedor":{ label: "🏭 Devueltos al Proveedor", items: [] },
     "en-bodega":         { label: "📦 Devueltos a Bodega", items: [] },
+    "merma":             { label: "🚫 Mermas", items: [] },
   };
 
   items.forEach(fl => {
@@ -2557,9 +2569,9 @@ window.renderFlotantes = function renderFlotantes() {
     grupo.items.forEach(fl => {
       const dias = diasTranscurridos(fl.fecha);
       const esAlerta = key === "alerta";
-      const cardClass = ["vendido","devuelto-proveedor","en-bodega"].includes(fl.estado) ? "devuelto" : esAlerta ? "alerta" : "";
-      const badgeClass = fl.estado==="vendido" ? "fl-badge-devuelto" : fl.estado==="devuelto-proveedor" ? "fl-badge-devuelto" : fl.estado==="en-bodega" ? "fl-badge-devuelto" : esAlerta ? "fl-badge-alerta" : "fl-badge-activo";
-      const badgeText = fl.estado==="vendido" ? "💰 Vendido" : fl.estado==="devuelto-proveedor" ? "🏭 Dev. Proveedor" : fl.estado==="en-bodega" ? "📦 En Bodega" : esAlerta ? `🚨 ALERTA: ${dias} días` : `🚐 ${dias===0?"Hoy":dias+" día"+(dias>1?"s":"")}`;
+      const cardClass = ["vendido","devuelto-proveedor","en-bodega","merma"].includes(fl.estado) ? "devuelto" : esAlerta ? "alerta" : "";
+      const badgeClass = fl.estado==="vendido" ? "fl-badge-devuelto" : fl.estado==="devuelto-proveedor" ? "fl-badge-devuelto" : fl.estado==="en-bodega" ? "fl-badge-devuelto" : fl.estado==="merma" ? "fl-badge-devuelto" : esAlerta ? "fl-badge-alerta" : "fl-badge-activo";
+      const badgeText = fl.estado==="vendido" ? "💰 Vendido" : fl.estado==="devuelto-proveedor" ? "🏭 Dev. Proveedor" : fl.estado==="en-bodega" ? "📦 En Bodega" : fl.estado==="merma" ? "🚫 Merma" : esAlerta ? `🚨 ALERTA: ${dias} días` : `🚐 ${dias===0?"Hoy":dias+" día"+(dias>1?"s":"")}`;
       html += `<div class="fl-card ${cardClass}">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
           <strong>${fl.codigo}</strong>
@@ -2579,6 +2591,7 @@ window.renderFlotantes = function renderFlotantes() {
           <button class="btn btn-sm btn-success" onclick="marcarFlotanteVendido('${fl.id}','${fl.codigo}','${fl.tecnico}')">💰 Vendido</button>
           <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="marcarFlotanteDevueltoProveedor('${fl.id}','${fl.codigo}','${fl.tecnico}')">🏭 Dev. Proveedor</button>
           <button class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="devolverABodega('${fl.id}','${fl.codigo}','${fl.tecnico}')">📦 A Bodega</button>
+          <button class="btn btn-sm" style="background:#ede9fe;color:#7c3aed" onclick="marcarFlotanteMerma('${fl.id}','${fl.codigo}','${fl.tecnico}')">🚫 Merma</button>
           <button class="btn btn-sm btn-danger" onclick="eliminarFlotante('${fl.id}')">🗑</button>
         </div>`:""}
       </div>`;
@@ -3396,35 +3409,169 @@ window.borrarTodoElStock=async function(){
 
 </script>
 
+
 <script>
-// Flotantes search - plain script, no module issues
+// ═══════════════════════════════════════════════════════════════════════
+// BUSCADOR DE FLOTANTES — Implementación 100% independiente del módulo.
+// No depende del scope del modulo JS principal, usa datos espejo en window.
+// ═══════════════════════════════════════════════════════════════════════
 (function() {
+  function diasEntre(fechaStr) {
+    if (!fechaStr) return 0;
+    var hoyStr = new Date().toISOString().slice(0,10);
+    var d1 = new Date(hoyStr);
+    var d2 = new Date(fechaStr);
+    var diff = Math.floor((d1 - d2) / 86400000);
+    return isNaN(diff) ? 0 : diff;
+  }
+
+  function render() {
+    var data = window.__flotantesData || {};
+    var busqEl = document.getElementById('fl-busq');
+    var tecEl  = document.getElementById('fl-fil-tec');
+    var estEl  = document.getElementById('fl-fil-estado');
+    var cont   = document.getElementById('flotantes-list');
+    if (!cont || !busqEl || !tecEl || !estEl) return; // vista no está visible aún
+
+    var busq = (busqEl.value || '').toLowerCase();
+    var filTec = tecEl.value;
+    var filEstado = estEl.value;
+
+    var items = Object.keys(data).map(function(id) {
+      var fl = data[id] || {};
+      return {
+        id: id, codigo: fl.codigo||'', descripcion: fl.descripcion||'',
+        tecnico: fl.tecnico||'', cantidad: fl.cantidad||1, estado: fl.estado||'',
+        fecha: fl.fecha||'', fechaHora: fl.fechaHora||'', obs: fl.obs||'',
+        resueltaEn: fl.resueltaEn||''
+      };
+    });
+
+    items.sort(function(a,b){ return (b.fechaHora||'').localeCompare(a.fechaHora||''); });
+
+    if (filTec) items = items.filter(function(f){ return f.tecnico === filTec; });
+    if (filEstado) {
+      items = items.filter(function(f) {
+        if (filEstado === 'alerta') return f.estado === 'activo' && diasEntre(f.fecha) >= 2;
+        return f.estado === filEstado;
+      });
+    }
+    if (busq) {
+      items = items.filter(function(f) {
+        return (f.codigo + f.descripcion + f.tecnico).toLowerCase().indexOf(busq) !== -1;
+      });
+    }
+
+    // KPIs
+    var activos = items.filter(function(f){ return f.estado==='activo' && diasEntre(f.fecha) < 2; }).length;
+    var alertas = items.filter(function(f){ return f.estado==='activo' && diasEntre(f.fecha) >= 2; }).length;
+    var vendidos = items.filter(function(f){ return f.estado==='vendido'; }).length;
+    var devProv = items.filter(function(f){ return f.estado==='devuelto-proveedor'; }).length;
+    var enBodega = items.filter(function(f){ return f.estado==='en-bodega'; }).length;
+    var kpisEl = document.getElementById('flotantes-kpis');
+    if (kpisEl) {
+      kpisEl.innerHTML =
+        '<div class="kpi"><div class="num" style="color:var(--amarillo)">'+activos+'</div><div class="lbl">En camioneta</div></div>' +
+        '<div class="kpi"><div class="num" style="color:var(--rojo)">'+alertas+'</div><div class="lbl">Con alerta (+2 días)</div></div>' +
+        '<div class="kpi"><div class="num" style="color:var(--verde)">'+vendidos+'</div><div class="lbl">Vendidos</div></div>' +
+        '<div class="kpi"><div class="num" style="color:#1d4ed8">'+devProv+'</div><div class="lbl">Dev. Proveedor</div></div>' +
+        '<div class="kpi"><div class="num" style="color:var(--azul-osc)">'+enBodega+'</div><div class="lbl">En Bodega</div></div>';
+    }
+
+    // Lista agrupada
+    if (!items.length) {
+      cont.innerHTML = '<div class="empty"><div class="icon">🚐</div>No hay artículos flotantes que coincidan.</div>';
+      return;
+    }
+
+    var grupos = {
+      activo: {label:'🚐 En Camioneta', items:[]},
+      alerta: {label:'🚨 Con Alerta (+2 días)', items:[]},
+      vendido: {label:'💰 Vendidos', items:[]},
+      'devuelto-proveedor': {label:'🏭 Devueltos al Proveedor', items:[]},
+      'en-bodega': {label:'📦 Devueltos a Bodega', items:[]}
+    };
+    items.forEach(function(fl) {
+      var dias = diasEntre(fl.fecha);
+      var esAlerta = fl.estado === 'activo' && dias >= 2;
+      if (esAlerta) grupos.alerta.items.push(fl);
+      else if (grupos[fl.estado]) grupos[fl.estado].items.push(fl);
+    });
+
+    var html = '';
+    Object.keys(grupos).forEach(function(key) {
+      var grupo = grupos[key];
+      if (!grupo.items.length) return;
+      html += '<div style="margin-bottom:20px"><div style="font-size:.88rem;font-weight:700;color:var(--azul-osc);margin-bottom:8px;padding:6px 12px;background:#f3f4f6;border-radius:8px;">' +
+        grupo.label + ' <span style="font-weight:400;color:var(--gris)">(' + grupo.items.length + ')</span></div>';
+      grupo.items.forEach(function(fl) {
+        var dias = diasEntre(fl.fecha);
+        var esAlerta = key === 'alerta';
+        var cardClass = (fl.estado==='vendido'||fl.estado==='devuelto-proveedor'||fl.estado==='en-bodega') ? 'devuelto' : (esAlerta ? 'alerta' : '');
+        var badgeClass = (fl.estado==='vendido'||fl.estado==='devuelto-proveedor'||fl.estado==='en-bodega') ? 'fl-badge-devuelto' : (esAlerta ? 'fl-badge-alerta' : 'fl-badge-activo');
+        var badgeText = fl.estado==='vendido' ? '💰 Vendido' : fl.estado==='devuelto-proveedor' ? '🏭 Dev. Proveedor' : fl.estado==='en-bodega' ? '📦 En Bodega' : esAlerta ? ('🚨 ALERTA: '+dias+' días') : ('🚐 '+(dias===0?'Hoy':dias+' día'+(dias>1?'s':'')));
+        html += '<div class="fl-card '+cardClass+'">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">' +
+          '<strong>'+fl.codigo+'</strong>' +
+          '<span class="fl-badge '+badgeClass+'">'+badgeText+'</span>' +
+          (dias>=2&&fl.estado==='activo' ? '<span class="dias-badge">+'+dias+' días</span>' : '') +
+          '<span style="font-size:.78rem;color:var(--gris);margin-left:auto">'+(fl.fecha||'—')+'</span>' +
+          '</div>' +
+          '<div class="job-meta">' +
+          '<span>📦 '+(fl.descripcion||'—')+'</span>' +
+          '<span>👷 '+(fl.tecnico||'—')+'</span>' +
+          '<span>🔢 '+fl.cantidad+' unid.</span>' +
+          (fl.resueltaEn ? '<span>✅ '+fl.resueltaEn+'</span>' : '') +
+          '</div>' +
+          (fl.obs ? '<div style="margin-top:5px;font-size:.8rem;color:#6b7280;">💬 '+fl.obs+'</div>' : '') +
+          (fl.estado==='activo' ?
+            '<div class="job-actions" style="margin-top:10px">' +
+            '<button class="btn btn-sm btn-success" onclick="marcarFlotanteVendido(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">💰 Vendido</button>' +
+            '<button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="marcarFlotanteDevueltoProveedor(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🏭 Dev. Proveedor</button>' +
+            '<button class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="devolverABodega(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">📦 A Bodega</button>' +
+            '<button class="btn btn-sm" style="background:#ede9fe;color:#7c3aed" onclick="marcarFlotanteMerma(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🚫 Merma</button>' +
+            '<button class="btn btn-sm btn-danger" onclick="eliminarFlotante(\''+fl.id+'\')">🗑</button>' +
+            '</div>' : '') +
+          '</div>';
+      });
+      html += '</div>';
+    });
+    cont.innerHTML = html;
+  }
+
+  window.__flRenderIndependiente = render;
+
+  function poblarTecnicoSelect() {
+    var tecEl = document.getElementById('fl-fil-tec');
+    if (!tecEl) return;
+    var tecnicos = window.__tecnicos || [];
+    var val = tecEl.value;
+    var html = '<option value="">Todos</option>';
+    tecnicos.forEach(function(t){ html += '<option value="'+t.nombre+'">'+t.nombre+'</option>'; });
+    tecEl.innerHTML = html;
+    tecEl.value = val;
+  }
+
   var attached = false;
-  function tryAttach() {
-    if (attached) return;
+  function attachListeners() {
     var b = document.getElementById('fl-busq');
     var t = document.getElementById('fl-fil-tec');
     var e = document.getElementById('fl-fil-estado');
     if (!b || !t || !e) return;
-    function doFilter() {
-      var rf = window.renderFlotantes;
-      if (typeof rf === 'function') rf();
-    }
-    b.addEventListener('input', doFilter);
-    t.addEventListener('change', doFilter);
-    e.addEventListener('change', doFilter);
-    attached = true;
-    console.log('Flotantes search listeners attached');
+    if (!b._flOk) { b.addEventListener('input', function(){ render(); }); b._flOk = true; }
+    if (!t._flOk) { t.addEventListener('change', function(){ render(); }); t._flOk = true; }
+    if (!e._flOk) { e.addEventListener('change', function(){ render(); }); e._flOk = true; }
   }
-  // Try every 500ms until elements exist and are visible
-  var interval = setInterval(function() {
+
+  // Reintentar cada 300ms indefinidamente (ligero) para cubrir cualquier
+  // momento en que el usuario entre a la vista Flotantes
+  setInterval(function() {
     var view = document.getElementById('view-flotantes');
     if (view && view.classList.contains('active')) {
-      tryAttach();
-    } else {
-      attached = false; // reset when view is not active
+      attachListeners();
+      poblarTecnicoSelect();
     }
-  }, 500);
+  }, 300);
 })();
 </script>
 </body>
