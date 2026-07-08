@@ -2301,8 +2301,10 @@ let flotantesData = {};
 
 onValue(ref(db, "flotantes"), snap => {
   flotantesData = snap.val() || {};
+  window.__flotantesData = flotantesData; // espejo para buscador independiente
   checkAlertasFlotantes();
   if (vista === "flotantes") renderFlotantes();
+  if (window.__flRenderIndependiente) window.__flRenderIndependiente();
 });
 
 // Poblar filtro técnico en flotantes
@@ -3518,7 +3520,8 @@ window.borrarTodoElStock=async function(){
       alerta: {label:'🚨 Con Alerta (+2 días)', items:[]},
       vendido: {label:'💰 Vendidos', items:[]},
       'devuelto-proveedor': {label:'🏭 Devueltos al Proveedor', items:[]},
-      'en-bodega': {label:'📦 Devueltos a Bodega', items:[]}
+      'en-bodega': {label:'📦 Devueltos a Bodega', items:[]},
+      'merma': {label:'🚫 Mermas', items:[]}
     };
     items.forEach(function(fl) {
       var dias = diasEntre(fl.fecha);
