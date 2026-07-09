@@ -124,6 +124,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul);box-shadow:0 0 
 .doc-btns{display:flex;gap:8px;flex-wrap:wrap}
 .doc-btn{flex:1;padding:9px;border:2px solid var(--borde);border-radius:8px;background:#fff;cursor:pointer;font-weight:600;font-size:.85rem;text-align:center;transition:all .15s;min-width:80px}
 .doc-btn.selected{border-color:var(--azul);background:var(--azul-clar);color:var(--azul)}
+#doc-merma.selected{border-color:#7c3aed!important;background:#f5f3ff!important;color:#7c3aed!important}
 
 
 
@@ -589,6 +590,10 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
           <div class="doc-btn" id="doc-factura"  onclick="selecDoc('factura')">&#129534; Factura</div>
           <div class="doc-btn" id="doc-boleta"   onclick="selecDoc('boleta')">&#128196; Boleta</div>
           <div class="doc-btn" id="doc-efectivo" onclick="selecDoc('efectivo')">&#128181; Efectivo</div>
+          <div class="doc-btn" id="doc-merma" onclick="selecDoc('merma')" style="border-color:#e9d5ff">&#128683; Merma</div>
+        </div>
+        <div id="merma-aviso" style="display:none;margin-top:10px;background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:8px;padding:12px;font-size:.83rem;color:#6d28d9;">
+          &#9888;&#65039; <strong>Trabajo marcado como MERMA.</strong> El vidrio se registrará como pérdida (roto en instalación). No se cobrará al cliente.
         </div>
         <!-- RUT solo para factura -->
         <div id="rut-factura-box" style="display:none;margin-top:12px;background:#eff6ff;border-radius:8px;padding:12px;border:1.5px solid #bfdbfe;">
@@ -603,6 +608,11 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
         <input type="file" id="c-foto" accept="image/*" capture="environment" onchange="previewFoto(this)">
         <img id="foto-preview" class="foto-preview" alt="Preview" onclick="abrirLightbox(this.src,'Vista previa')">
         <div id="foto-status" style="font-size:.78rem;color:var(--gris);margin-top:4px;"></div>
+      </div>
+      <div class="fg full" id="valor-cobrado-box">
+        <label>&#128176; Valor Cobrado al Cliente (CLP) *</label>
+        <input type="number" id="c-valor" min="0" placeholder="Ej: 120000" style="font-size:1.05rem;font-weight:600">
+        <div style="font-size:.75rem;color:#6b7280;margin-top:4px">Monto total que se le cobró al cliente por este trabajo</div>
       </div>
       <div class="fg full"><label>Observaciones</label><textarea id="c-obs" rows="2"></textarea></div>
     </div>
@@ -1335,6 +1345,12 @@ window.abrirCompletar=function(id){
   if(rutBox) rutBox.style.display="none";
   const rutInput=document.getElementById("c-rut");
   if(rutInput) rutInput.value="";
+  const cval=document.getElementById("c-valor");
+  if(cval) cval.value="";
+  const mAviso=document.getElementById("merma-aviso");
+  if(mAviso) mAviso.style.display="none";
+  const vBox=document.getElementById("valor-cobrado-box");
+  if(vBox) vBox.style.display="block";
   document.getElementById("modal-completar").classList.add("open");
 };
 window.closeCompletar=function(){document.getElementById("modal-completar").classList.remove("open");completarId=null;};
@@ -1346,6 +1362,17 @@ window.selecDoc=function(tipo){
   const rutBox = document.getElementById("rut-factura-box");
   if(rutBox) rutBox.style.display = tipo === "factura" ? "block" : "none";
   if(tipo !== "factura") { const rut = document.getElementById("c-rut"); if(rut) rut.value = ""; }
+  // Si es MERMA: ocultar valor cobrado y mostrar aviso
+  const mermaAviso = document.getElementById("merma-aviso");
+  const valorBox = document.getElementById("valor-cobrado-box");
+  if(tipo === "merma"){
+    if(mermaAviso) mermaAviso.style.display = "block";
+    if(valorBox) valorBox.style.display = "none";
+    const cv = document.getElementById("c-valor"); if(cv) cv.value = "0";
+  } else {
+    if(mermaAviso) mermaAviso.style.display = "none";
+    if(valorBox) valorBox.style.display = "block";
+  }
 };
 window.previewFoto=function(input){
   const file=input.files[0];if(!file)return;
@@ -1386,6 +1413,9 @@ window.confirmarCompletar=async function(){
   if(!docSel){alert("⚠️ Selecciona el tipo de documento");return;}
   const rut=document.getElementById("c-rut")?.value.trim()||"";
   if(docSel==="factura"&&!rut){alert("⚠️ Ingresa el RUT del cliente para emitir factura");return;}
+  const esMerma = docSel === "merma";
+  const valorCobrado = esMerma ? 0 : (parseFloat(document.getElementById("c-valor")?.value)||0);
+  if(!esMerma && valorCobrado <= 0){alert("⚠️ Ingresa el valor cobrado al cliente");return;}
   if(!fotoB64){alert("⚠️ Debes tomar una foto del trabajo terminado");return;}
   const btn=document.getElementById("btn-confirmar");
   btn.textContent="⏳ Guardando...";btn.disabled=true;
@@ -1406,17 +1436,39 @@ window.confirmarCompletar=async function(){
         : Promise.resolve()
     ]);
     if(fotoResult.status==="rejected") console.warn("Storage:",fotoResult.reason);
+    // Obtener costo del producto desde el inventario
+    const costoProducto = stockEntry ? (Number(stockEntry[1].precio)||0) : 0;
+    const ganancia = valorCobrado - costoProducto;
+
     await update(ref(db,`trabajos/${completarId}`),{
       estado:"completado",cliente,telefono,tipo:servicio,
       documento:docSel,codigoVidrio,obs,fotoUrl,
       rut:document.getElementById("c-rut")?.value.trim()||null,
+      valorCobrado, costoProducto, ganancia, esMerma,
       completadoEn:ahora(),completadoPor:tecActivo
     });
-    await push(ref(db,"historial"),{tipo:"salida",codigo:codigoVidrio,cantidad:1,
-      cliente,telefono,servicio,documento:docSel,
-      tecnico:tecActivo,fecha:hoy(),fechaHora:ahora(),
-      trabajoId:completarId,fotoUrl});
-    toast("✅ Trabajo completado y stock actualizado");
+
+    // Registrar en historial — como merma o como salida/venta
+    if(esMerma){
+      await push(ref(db,"historial"),{tipo:"merma",codigo:codigoVidrio,cantidad:1,
+        cliente,telefono,servicio,
+        descripcion:`Merma en instalación — ${servicio}`,
+        costoProducto, tecnico:tecActivo,fecha:hoy(),fechaHora:ahora(),
+        trabajoId:completarId,fotoUrl});
+      // Registrar también en la colección de mermas para el módulo de mermas
+      await push(ref(db,"mermas"),{codigo:codigoVidrio,descripcion:codigoVidrio,
+        cantidad:1,responsable:tecActivo,tipo:"Rotura en instalación",
+        detalle:`Roto durante trabajo: ${servicio} — Cliente: ${cliente}`,
+        fecha:hoy(),fechaHora:ahora(),precio:costoProducto,costoTotal:costoProducto,
+        registradoPor:tecActivo});
+    } else {
+      await push(ref(db,"historial"),{tipo:"salida",codigo:codigoVidrio,cantidad:1,
+        cliente,telefono,servicio,documento:docSel,
+        valorCobrado, costoProducto, ganancia,
+        tecnico:tecActivo,fecha:hoy(),fechaHora:ahora(),
+        trabajoId:completarId,fotoUrl});
+    }
+    toast(esMerma ? "🚫 Trabajo registrado como MERMA" : `✅ Trabajo completado — Cobrado: $${valorCobrado.toLocaleString("es-CL")}`);
     closeCompletar();renderTecList();
     // Re-evaluar ubicación — si no hay más trabajos en camino, dejar de compartir
     setTimeout(iniciarCompartirUbicacion, 500);
@@ -2335,9 +2387,12 @@ function renderInforme() {
   }
 
   const costoEntradas = entradas.reduce((s,h) => s + ((getCosto(h.codigo)||0) * (h.cantidad||0)), 0);
-  const costoSalidas  = salidas.reduce((s,h)  => s + ((getCosto(h.codigo)||0) * (h.cantidad||0)), 0);
+  const costoSalidas  = salidas.reduce((s,h)  => s + ((h.costoProducto!==undefined?h.costoProducto:getCosto(h.codigo))||0) * (h.cantidad||1), 0);
   const costoDevs     = devs.reduce((s,h)     => s + ((getCosto(h.codigo)||0) * (h.cantidad||0)), 0);
-  const costoMermas   = mermas.reduce((s,h)   => s + ((getCosto(h.codigo)||0) * (h.cantidad||0)), 0);
+  const costoMermas   = mermas.reduce((s,h)   => s + ((h.costoProducto!==undefined?h.costoProducto:getCosto(h.codigo))||0) * (h.cantidad||1), 0);
+  // CRUCE COSTO vs VENTA
+  const totalVendido  = salidas.reduce((s,h) => s + (Number(h.valorCobrado)||0), 0);
+  const gananciaTotal = salidas.reduce((s,h) => s + (Number(h.ganancia)||0), 0);
 
   function fmt(n) { return n ? "$" + n.toLocaleString("es-CL") : "—"; }
   function tabla(items, cols) {
@@ -2353,12 +2408,46 @@ function renderInforme() {
     </table>`;
   }
 
+  function tablaVentas(items) {
+    if(!items.length) return `<p style="color:var(--gris);font-size:.84rem;font-style:italic;padding:8px 0">Sin ventas</p>`;
+    return `<table style="width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:4px">
+      <thead><tr>
+        <th style="background:#f3f4f6;padding:6px 8px;text-align:left;border-bottom:1px solid var(--borde)">Código</th>
+        <th style="background:#f3f4f6;padding:6px 8px;text-align:left;border-bottom:1px solid var(--borde)">Cliente</th>
+        <th style="background:#f3f4f6;padding:6px 8px;text-align:right;border-bottom:1px solid var(--borde)">Costo</th>
+        <th style="background:#f3f4f6;padding:6px 8px;text-align:right;border-bottom:1px solid var(--borde)">Cobrado</th>
+        <th style="background:#f3f4f6;padding:6px 8px;text-align:right;border-bottom:1px solid var(--borde)">Ganancia</th>
+      </tr></thead>
+      <tbody>${items.map(h=>{
+        const costo = (h.costoProducto!==undefined?h.costoProducto:getCosto(h.codigo))||0;
+        const cobrado = Number(h.valorCobrado)||0;
+        const gan = h.ganancia!==undefined ? h.ganancia : (cobrado-costo);
+        return `<tr>
+          <td style="padding:5px 8px;border-bottom:1px solid #f9fafb">${h.codigo||"—"}</td>
+          <td style="padding:5px 8px;border-bottom:1px solid #f9fafb">${h.cliente||"—"}</td>
+          <td style="padding:5px 8px;border-bottom:1px solid #f9fafb;text-align:right;color:#c2410c">${fmt(costo)}</td>
+          <td style="padding:5px 8px;border-bottom:1px solid #f9fafb;text-align:right;color:var(--verde);font-weight:600">${fmt(cobrado)}</td>
+          <td style="padding:5px 8px;border-bottom:1px solid #f9fafb;text-align:right;font-weight:700;color:${gan>=0?'var(--verde)':'var(--rojo)'}">${fmt(gan)}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+  }
+
   document.getElementById("informe-contenido").innerHTML = `
-    <div style="background:#f0fdf4;border-radius:10px;padding:14px;margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
-      <div class="kpi" style="box-shadow:none;border:1px solid #bbf7d0"><div class="num" style="font-size:1.3rem;color:var(--verde)">${fmt(costoEntradas)}</div><div class="lbl">Entradas</div></div>
-      <div class="kpi" style="box-shadow:none;border:1px solid #bfdbfe"><div class="num" style="font-size:1.3rem;color:var(--azul)">${fmt(costoSalidas)}</div><div class="lbl">Salidas</div></div>
-      <div class="kpi" style="box-shadow:none;border:1px solid #fde68a"><div class="num" style="font-size:1.3rem;color:var(--amarillo)">${fmt(costoDevs)}</div><div class="lbl">Devoluciones</div></div>
-      <div class="kpi" style="box-shadow:none;border:1px solid #fecaca"><div class="num" style="font-size:1.3rem;color:var(--rojo)">${fmt(costoMermas)}</div><div class="lbl">Mermas</div></div>
+    <!-- CRUCE COSTO vs VENTA -->
+    <div style="background:linear-gradient(135deg,#f0fdf4,#eff6ff);border-radius:12px;padding:16px;margin-bottom:16px;border:1.5px solid #86efac">
+      <div style="font-weight:700;color:var(--azul-osc);margin-bottom:12px;font-size:.95rem">💰 Resumen Financiero del Día</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">
+        <div class="kpi" style="box-shadow:none;border:1px solid #bfdbfe"><div class="num" style="font-size:1.3rem;color:var(--verde)">${fmt(totalVendido)}</div><div class="lbl">Total Vendido</div></div>
+        <div class="kpi" style="box-shadow:none;border:1px solid #fed7aa"><div class="num" style="font-size:1.3rem;color:#c2410c">${fmt(costoSalidas)}</div><div class="lbl">Costo Productos</div></div>
+        <div class="kpi" style="box-shadow:none;border:2px solid ${gananciaTotal>=0?'#86efac':'#fca5a5'}"><div class="num" style="font-size:1.4rem;color:${gananciaTotal>=0?'var(--verde)':'var(--rojo)'}">${fmt(gananciaTotal)}</div><div class="lbl" style="font-weight:700">${gananciaTotal>=0?'📈 Ganancia':'📉 Pérdida'}</div></div>
+      </div>
+    </div>
+    <!-- MOVIMIENTOS DE STOCK -->
+    <div style="background:#f9fafb;border-radius:10px;padding:14px;margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+      <div class="kpi" style="box-shadow:none;border:1px solid #bbf7d0"><div class="num" style="font-size:1.15rem;color:var(--verde)">${fmt(costoEntradas)}</div><div class="lbl">Entradas (compras)</div></div>
+      <div class="kpi" style="box-shadow:none;border:1px solid #fde68a"><div class="num" style="font-size:1.15rem;color:var(--amarillo)">${fmt(costoDevs)}</div><div class="lbl">Devoluciones</div></div>
+      <div class="kpi" style="box-shadow:none;border:1px solid #fecaca"><div class="num" style="font-size:1.15rem;color:var(--rojo)">${fmt(costoMermas)}</div><div class="lbl">Mermas (pérdida)</div></div>
     </div>
 
     <div style="margin-bottom:14px">
@@ -2366,8 +2455,8 @@ function renderInforme() {
       ${tabla(entradas,["Código","Descripción","Cant.","Costo"])}
     </div>
     <div style="margin-bottom:14px">
-      <div style="font-weight:700;color:var(--azul);margin-bottom:6px">📤 Salidas (${salidas.length})</div>
-      ${tabla(salidas,["Código","Servicio","Cant.","Costo"])}
+      <div style="font-weight:700;color:var(--azul);margin-bottom:6px">📤 Ventas / Salidas (${salidas.length})</div>
+      ${tablaVentas(salidas)}
     </div>
     <div style="margin-bottom:14px">
       <div style="font-weight:700;color:var(--amarillo);margin-bottom:6px">↩️ Devoluciones (${devs.length})</div>
@@ -2387,10 +2476,13 @@ window.exportarInformeDia = function() {
     const item = Object.values(stockData).find(v => v.codigo === codigo);
     return item?.precio || 0;
   }
-  const rows = [["Tipo","Código","Descripción","Cantidad","Costo Unit.","Costo Total","Técnico","Fecha/Hora"]];
+  const rows = [["Tipo","Código","Descripción","Cliente","Cantidad","Costo Unit.","Costo Total","Valor Cobrado","Ganancia","Técnico","Fecha/Hora"]];
   movsDia.forEach(h => {
-    const cu = getCosto(h.codigo);
-    rows.push([h.tipo||"",h.codigo||"",h.descripcion||h.servicio||"",h.cantidad||1,cu,cu*(h.cantidad||1),h.tecnico||"",h.fechaHora||""]);
+    const cu = (h.costoProducto!==undefined?h.costoProducto:getCosto(h.codigo))||0;
+    const qty = h.cantidad||1;
+    const cobrado = Number(h.valorCobrado)||0;
+    const gan = h.ganancia!==undefined ? h.ganancia : (h.tipo==="salida" ? cobrado-cu : 0);
+    rows.push([h.tipo||"",h.codigo||"",h.descripcion||h.servicio||"",h.cliente||"",qty,cu,cu*qty,cobrado||"",gan||"",h.tecnico||"",h.fechaHora||""]);
   });
   const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
   const a = document.createElement("a");
