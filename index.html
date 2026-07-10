@@ -363,6 +363,7 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
       <div class="section-title" style="margin:0" id="tec-titulo"></div>
       <button class="btn btn-sm" style="background:#e5e7eb;color:#374151;margin-left:auto" onclick="salirTecnico()">&#8617; Cambiar</button>
     </div>
+    <div id="tec-flotantes-libres"></div>
     <div class="job-list" id="tec-list"></div>
   </div>
 </div>
@@ -878,6 +879,63 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
   </div>
 </div>
 
+<!-- MODAL ASIGNAR TRABAJO DESDE FLOTANTE -->
+<div class="modal-overlay" id="modal-asignar-trabajo">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2>&#129520; Asignar Trabajo</h2>
+      <button class="close-btn" onclick="closeAsignarTrabajoModal()">&#10005;</button>
+    </div>
+    <p style="font-size:.84rem;color:var(--gris);margin-bottom:14px;">
+      Convierte este vidrio flotante en un trabajo completo: elige el maestro que hará la instalación y los datos del cliente.
+    </p>
+    <div class="form-grid">
+      <div class="fg full">
+        <label>Vidrio</label>
+        <input type="text" id="at-vidrio" readonly style="background:#f9fafb;font-weight:600">
+      </div>
+      <div class="fg full">
+        <label>Maestro que instalará *</label>
+        <select id="at-tecnico"></select>
+      </div>
+      <div class="fg">
+        <label>Nombre Cliente *</label>
+        <input type="text" id="at-cliente" placeholder="Nombre completo">
+      </div>
+      <div class="fg">
+        <label>Teléfono *</label>
+        <input type="tel" id="at-telefono" placeholder="+56 9 ...">
+      </div>
+      <div class="fg full">
+        <label>Tipo de Servicio *</label>
+        <select id="at-tipo">
+          <option>Cambio de parabrisas</option>
+          <option>Cambio de vidrio puerta</option>
+          <option>Cambio de aleta</option>
+          <option>Cambio de luneta</option>
+          <option>Otro</option>
+        </select>
+      </div>
+      <div class="fg full">
+        <label>Dirección *</label>
+        <input type="text" id="at-direccion" placeholder="Escribe la dirección...">
+      </div>
+      <div class="fg">
+        <label>Hora</label>
+        <input type="time" id="at-hora">
+      </div>
+      <div class="fg full">
+        <label>Observaciones</label>
+        <input type="text" id="at-obs" placeholder="Notas adicionales...">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn" style="background:#e5e7eb;color:#374151" onclick="closeAsignarTrabajoModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-asignar-trabajo" onclick="confirmarAsignarTrabajo()">&#129520; Crear Trabajo</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL REASIGNAR FLOTANTE -->
 <div class="modal-overlay" id="modal-reasignar">
   <div class="modal" style="max-width:440px">
@@ -1337,7 +1395,31 @@ window.salirTecnico=function(){
   document.getElementById("tec-selector-wrap").style.display="block";
   document.getElementById("tec-trabajos").style.display="none";
 };
+function renderFlotantesLibresTec(){
+  const cont = document.getElementById("tec-flotantes-libres");
+  if(!cont || !tecActivo) return;
+  const misFlotantes = Object.entries(flotantesData)
+    .map(([id,fl])=>({...fl,id}))
+    .filter(fl => fl.tecnico===tecActivo && fl.estado==="activo" && !fl.trabajoAsignadoId);
+  if(!misFlotantes.length){ cont.innerHTML=""; return; }
+  cont.innerHTML = `
+    <div style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:12px;padding:14px;margin-bottom:16px;">
+      <div style="font-weight:700;color:#6d28d9;margin-bottom:10px;font-size:.92rem">🚐 Vidrios en tu poder sin trabajo asignado (${misFlotantes.length})</div>
+      ${misFlotantes.map(fl => `
+        <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid #ede9fe;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <div>
+              <strong>${fl.codigo}</strong>
+              <span style="font-size:.8rem;color:var(--gris);margin-left:6px">${fl.descripcion||""}</span>
+            </div>
+            <button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-weight:700" onclick="abrirAsignarTrabajo('${fl.id}','${fl.codigo}','${fl.tecnico}')">🧰 Asignar Trabajo</button>
+          </div>
+        </div>`).join("")}
+    </div>`;
+}
+
 function renderTecList(){
+  renderFlotantesLibresTec();
   const lista=listaHoy().filter(t=>t.tecnico===tecActivo&&t.estado!=="cancelado");
   const cont=document.getElementById("tec-list");
   if(!lista.length){cont.innerHTML=`<div class="empty"><div class="icon">✅</div>No tienes trabajos asignados hoy.</div>`;return;}
@@ -1502,6 +1584,14 @@ window.confirmarCompletar=async function(){
         valorCobrado, costoProducto, ganancia,
         tecnico:tecActivo,fecha:hoy(),fechaHora:ahora(),
         trabajoId:completarId,fotoUrl});
+    }
+    // Si este trabajo vino de un flotante asignado, marcar el flotante como resuelto
+    const trabajoActual = trabajos[completarId];
+    if (trabajoActual && trabajoActual.flotanteOrigenId) {
+      await update(ref(db, `flotantes/${trabajoActual.flotanteOrigenId}`), {
+        estado: esMerma ? "merma" : "instalado",
+        resueltaEn: ahora(),
+      });
     }
     toast(esMerma ? "🚫 Trabajo registrado como MERMA" : `✅ Trabajo completado — Cobrado: $${valorCobrado.toLocaleString("es-CL")}`);
     closeCompletar();renderTecList();
@@ -2392,6 +2482,7 @@ onValue(ref(db, "flotantes"), snap => {
   checkAlertasFlotantes();
   if (vista === "flotantes") renderFlotantes();
   if (window.__flRenderIndependiente) window.__flRenderIndependiente();
+  if (vista === "tec" && tecActivo) renderFlotantesLibresTec();
 });
 
 // Poblar filtro técnico en flotantes
@@ -2673,18 +2764,22 @@ window.renderFlotantes = function renderFlotantes() {
 
   // Agrupar por estado
   const grupos = {
+    asignado:            { label: "🧰 Con Trabajo Asignado", items: [] },
     activo:              { label: "🚐 En Camioneta", items: [] },
     alerta:              { label: "🚨 Con Alerta (+2 días)", items: [] },
     vendido:             { label: "💰 Vendidos", items: [] },
     "devuelto-proveedor":{ label: "🏭 Devueltos al Proveedor", items: [] },
     "en-bodega":         { label: "📦 Devueltos a Bodega", items: [] },
     "merma":             { label: "🚫 Mermas", items: [] },
+    "instalado":         { label: "✅ Instalados (Trabajo Completado)", items: [] },
   };
 
   items.forEach(fl => {
     const dias = diasTranscurridos(fl.fecha);
-    const esAlerta = fl.estado === "activo" && dias >= 2;
-    if (esAlerta) grupos.alerta.items.push(fl);
+    const tieneTrabajo = fl.estado === "activo" && fl.trabajoAsignadoId;
+    const esAlerta = fl.estado === "activo" && !fl.trabajoAsignadoId && dias >= 2;
+    if (tieneTrabajo) grupos.asignado.items.push(fl);
+    else if (esAlerta) grupos.alerta.items.push(fl);
     else if (grupos[fl.estado]) grupos[fl.estado].items.push(fl);
   });
 
@@ -2715,15 +2810,22 @@ window.renderFlotantes = function renderFlotantes() {
           ${fl.resueltaEn?`<span>✅ ${fl.resueltaEn}</span>`:""}
         </div>
         ${fl.obs?`<div style="margin-top:5px;font-size:.8rem;color:#6b7280;">💬 ${fl.obs}</div>`:""}
-        ${fl.estado==="activo"?`
+        ${fl.trabajoAsignadoId ? `
+        <div style="margin-top:8px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px 10px;font-size:.82rem;color:#6d28d9;">
+          🧰 Trabajo creado para <strong>${fl.clienteAsignado||"cliente"}</strong> — instalará <strong>${fl.tecnico}</strong>
+        </div>
+        <div class="job-actions" style="margin-top:8px">
+          <button class="btn btn-sm btn-danger" onclick="cancelarAsignacionFlotante('${fl.id}')">↩️ Cancelar Asignación</button>
+        </div>` : (fl.estado==="activo"?`
         <div class="job-actions" style="margin-top:10px">
+          <button class="btn btn-sm" style="background:#ede9fe;color:#7c3aed;font-weight:700" onclick="abrirAsignarTrabajo('${fl.id}','${fl.codigo}','${fl.tecnico}')">🧰 Asignar Trabajo</button>
           <button class="btn btn-sm btn-success" onclick="marcarFlotanteVendido('${fl.id}','${fl.codigo}','${fl.tecnico}')">💰 Vendido</button>
           <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="marcarFlotanteDevueltoProveedor('${fl.id}','${fl.codigo}','${fl.tecnico}')">🏭 Dev. Proveedor</button>
           <button class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="devolverABodega('${fl.id}','${fl.codigo}','${fl.tecnico}')">📦 A Bodega</button>
-          <button class="btn btn-sm" style="background:#ede9fe;color:#7c3aed" onclick="marcarFlotanteMerma('${fl.id}','${fl.codigo}','${fl.tecnico}')">🚫 Merma</button>
+          <button class="btn btn-sm" style="background:#fef3e2;color:#c2410c" onclick="marcarFlotanteMerma('${fl.id}','${fl.codigo}','${fl.tecnico}')">🚫 Merma</button>
           <button class="btn btn-sm" style="background:#e0f2fe;color:#0369a1" onclick="reasignarFlotante('${fl.id}','${fl.codigo}','${fl.tecnico}')">🔄 Reasignar</button>
           <button class="btn btn-sm btn-danger" onclick="eliminarFlotante('${fl.id}')">🗑</button>
-        </div>`:""}
+        </div>`:"")}
       </div>`;
     });
     html += "</div>";
@@ -2832,6 +2934,101 @@ window.marcarFlotanteMerma = function(id, codigo, tecnico) {
   info.style.background = "#f0fdf4"; info.style.color = "var(--verde)";
   info.style.display = "block";
   document.getElementById("modal-merma").classList.add("open");
+};
+
+let asignarTrabajoFlotanteId = null;
+
+window.abrirAsignarTrabajo = function(id, codigo, tecnico) {
+  const fl = flotantesData[id];
+  asignarTrabajoFlotanteId = id;
+  document.getElementById("at-vidrio").value = `${codigo} — ${fl?.descripcion||""}`;
+  document.getElementById("at-cliente").value = "";
+  document.getElementById("at-telefono").value = "";
+  document.getElementById("at-direccion").value = "";
+  document.getElementById("at-hora").value = "";
+  document.getElementById("at-obs").value = "";
+  document.getElementById("at-tipo").selectedIndex = 0;
+  const sel = document.getElementById("at-tecnico");
+  sel.innerHTML = tecnicos.map(t => `<option value="${t.nombre}" ${t.nombre===tecnico?"selected":""}>${t.nombre}</option>`).join("");
+  const btn = document.getElementById("btn-asignar-trabajo");
+  btn.disabled = false; btn.textContent = "🧰 Crear Trabajo";
+  document.getElementById("modal-asignar-trabajo").classList.add("open");
+  setTimeout(() => { if (typeof initAutocomplete === "function") initAutocomplete(); }, 100);
+};
+
+window.closeAsignarTrabajoModal = function() {
+  document.getElementById("modal-asignar-trabajo").classList.remove("open");
+  asignarTrabajoFlotanteId = null;
+};
+
+window.confirmarAsignarTrabajo = async function() {
+  if (!asignarTrabajoFlotanteId) return;
+  const fl = flotantesData[asignarTrabajoFlotanteId];
+  if (!fl) { alert("⚠️ Este flotante ya no existe"); closeAsignarTrabajoModal(); return; }
+
+  const tecnico   = document.getElementById("at-tecnico").value;
+  const cliente   = document.getElementById("at-cliente").value.trim();
+  const telefono  = document.getElementById("at-telefono").value.trim();
+  const tipo      = document.getElementById("at-tipo").value;
+  const direccion = document.getElementById("at-direccion").value.trim();
+  const hora      = document.getElementById("at-hora").value;
+  const obs       = document.getElementById("at-obs").value.trim();
+
+  if (!tecnico)   { alert("⚠️ Selecciona el maestro que instalará"); return; }
+  if (!cliente)   { alert("⚠️ Ingresa el nombre del cliente"); return; }
+  if (!telefono)  { alert("⚠️ Ingresa el teléfono"); return; }
+  if (!direccion) { alert("⚠️ Ingresa la dirección"); return; }
+
+  const btn = document.getElementById("btn-asignar-trabajo");
+  btn.disabled = true; btn.textContent = "⏳ Creando...";
+
+  try {
+    // 1. Crear el trabajo completo, igual que "Nuevo Trabajo"
+    const nuevoTrabajoRef = await push(ref(db, "trabajos"), {
+      cliente, telefono, direccion, tipo, hora, obs,
+      codigo: fl.codigo,
+      tecnico,
+      estado: "pendiente",
+      fecha: hoy(),
+      creadoEn: ahora(),
+      flotanteOrigenId: asignarTrabajoFlotanteId,
+    });
+
+    // 2. Vincular el flotante a este trabajo (deja de estar "libre")
+    await update(ref(db, `flotantes/${asignarTrabajoFlotanteId}`), {
+      tecnico,
+      trabajoAsignadoId: nuevoTrabajoRef.key,
+      clienteAsignado: cliente,
+    });
+
+    // 3. Registrar en historial
+    await push(ref(db, "historial"), {
+      tipo: "flotante-asignado-trabajo",
+      codigo: fl.codigo,
+      cantidad: fl.cantidad || 1,
+      descripcion: `Trabajo creado para ${cliente} — Maestro: ${tecnico}`,
+      tecnico, fecha: hoy(), fechaHora: ahora(),
+    });
+
+    toast(`🧰 Trabajo creado y asignado a ${tecnico}`);
+    closeAsignarTrabajoModal();
+  } catch(e) {
+    alert("Error: " + e.message);
+    btn.disabled = false; btn.textContent = "🧰 Crear Trabajo";
+  }
+};
+
+window.cancelarAsignacionFlotante = async function(id) {
+  const fl = flotantesData[id];
+  if (!fl || !fl.trabajoAsignadoId) return;
+  if (!confirm("¿Cancelar la asignación? El trabajo creado quedará marcado como cancelado y el vidrio volverá a estar disponible.")) return;
+  try {
+    await update(ref(db, `trabajos/${fl.trabajoAsignadoId}`), { estado: "cancelado" });
+    await update(ref(db, `flotantes/${id}`), { trabajoAsignadoId: null, clienteAsignado: null });
+    toast("↩️ Asignación cancelada — vidrio disponible nuevamente");
+  } catch(e) {
+    alert("Error: " + e.message);
+  }
 };
 
 let reasignarFlotanteId = null;
@@ -3564,6 +3761,16 @@ function initAutocomplete(){
     });
     inputTrabajo._acInit = true;
   }
+  // Autocomplete para modal "Asignar Trabajo" desde Flotante
+  const inputAsignar = document.getElementById("at-direccion");
+  if(inputAsignar && !inputAsignar._acInit){
+    const ac2 = new google.maps.places.Autocomplete(inputAsignar, options);
+    ac2.addListener("place_changed", ()=>{
+      const place = ac2.getPlace();
+      if(place.formatted_address) inputAsignar.value = place.formatted_address;
+    });
+    inputAsignar._acInit = true;
+  }
 }
 
 // Inicializar cuando Google Maps esté listo
@@ -3658,7 +3865,8 @@ window.borrarTodoElStock=async function(){
         id: id, codigo: fl.codigo||'', descripcion: fl.descripcion||'',
         tecnico: fl.tecnico||'', cantidad: fl.cantidad||1, estado: fl.estado||'',
         fecha: fl.fecha||'', fechaHora: fl.fechaHora||'', obs: fl.obs||'',
-        resueltaEn: fl.resueltaEn||''
+        resueltaEn: fl.resueltaEn||'', trabajoAsignadoId: fl.trabajoAsignadoId||'',
+        clienteAsignado: fl.clienteAsignado||''
       };
     });
 
@@ -3701,17 +3909,21 @@ window.borrarTodoElStock=async function(){
     }
 
     var grupos = {
+      asignado: {label:'🧰 Con Trabajo Asignado', items:[]},
       activo: {label:'🚐 En Camioneta', items:[]},
       alerta: {label:'🚨 Con Alerta (+2 días)', items:[]},
       vendido: {label:'💰 Vendidos', items:[]},
       'devuelto-proveedor': {label:'🏭 Devueltos al Proveedor', items:[]},
       'en-bodega': {label:'📦 Devueltos a Bodega', items:[]},
-      'merma': {label:'🚫 Mermas', items:[]}
+      'merma': {label:'🚫 Mermas', items:[]},
+      'instalado': {label:'✅ Instalados (Trabajo Completado)', items:[]}
     };
     items.forEach(function(fl) {
       var dias = diasEntre(fl.fecha);
-      var esAlerta = fl.estado === 'activo' && dias >= 2;
-      if (esAlerta) grupos.alerta.items.push(fl);
+      var tieneTrabajo = fl.estado === 'activo' && fl.trabajoAsignadoId;
+      var esAlerta = fl.estado === 'activo' && !fl.trabajoAsignadoId && dias >= 2;
+      if (tieneTrabajo) grupos.asignado.items.push(fl);
+      else if (esAlerta) grupos.alerta.items.push(fl);
       else if (grupos[fl.estado]) grupos[fl.estado].items.push(fl);
     });
 
@@ -3741,15 +3953,21 @@ window.borrarTodoElStock=async function(){
           (fl.resueltaEn ? '<span>✅ '+fl.resueltaEn+'</span>' : '') +
           '</div>' +
           (fl.obs ? '<div style="margin-top:5px;font-size:.8rem;color:#6b7280;">💬 '+fl.obs+'</div>' : '') +
-          (fl.estado==='activo' ?
+          (fl.trabajoAsignadoId ?
+            '<div style="margin-top:8px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px 10px;font-size:.82rem;color:#6d28d9;">🧰 Trabajo creado para <strong>'+(fl.clienteAsignado||'cliente')+'</strong> — instalará <strong>'+fl.tecnico+'</strong></div>' +
+            '<div class="job-actions" style="margin-top:8px">' +
+            '<button class="btn btn-sm btn-danger" onclick="cancelarAsignacionFlotante(\''+fl.id+'\')">↩️ Cancelar Asignación</button>' +
+            '</div>'
+          : (fl.estado==='activo' ?
             '<div class="job-actions" style="margin-top:10px">' +
+            '<button class="btn btn-sm" style="background:#ede9fe;color:#7c3aed;font-weight:700" onclick="abrirAsignarTrabajo(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🧰 Asignar Trabajo</button>' +
             '<button class="btn btn-sm btn-success" onclick="marcarFlotanteVendido(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">💰 Vendido</button>' +
             '<button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="marcarFlotanteDevueltoProveedor(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🏭 Dev. Proveedor</button>' +
             '<button class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="devolverABodega(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">📦 A Bodega</button>' +
-            '<button class="btn btn-sm" style="background:#ede9fe;color:#7c3aed" onclick="marcarFlotanteMerma(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🚫 Merma</button>' +
+            '<button class="btn btn-sm" style="background:#fef3e2;color:#c2410c" onclick="marcarFlotanteMerma(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🚫 Merma</button>' +
             '<button class="btn btn-sm" style="background:#e0f2fe;color:#0369a1" onclick="reasignarFlotante(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🔄 Reasignar</button>' +
             '<button class="btn btn-sm btn-danger" onclick="eliminarFlotante(\''+fl.id+'\')">🗑</button>' +
-            '</div>' : '') +
+            '</div>' : '')) +
           '</div>';
       });
       html += '</div>';
