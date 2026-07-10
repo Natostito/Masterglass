@@ -121,6 +121,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul);box-shadow:0 0 
 .hist-salida{background:#dbeafe;color:#1d4ed8}
 .hist-ajuste{background:#fef3c7;color:#92400e}
 .foto-preview{width:100%;max-height:180px;object-fit:cover;border-radius:8px;margin-top:8px;display:none}
+.foto-thumb-wrap{position:relative;width:90px;height:90px;border-radius:8px;overflow:hidden;border:1.5px solid var(--borde)}
+.foto-thumb-wrap img{width:100%;height:100%;object-fit:cover;cursor:pointer}
+.foto-thumb-remove{position:absolute;top:2px;right:2px;background:rgba(220,38,38,.9);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:.8rem;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center}
+.foto-thumb-badge{position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.6);color:#fff;font-size:.65rem;padding:1px 5px;border-radius:4px}
 .doc-btns{display:flex;gap:8px;flex-wrap:wrap}
 .doc-btn{flex:1;padding:9px;border:2px solid var(--borde);border-radius:8px;background:#fff;cursor:pointer;font-weight:600;font-size:.85rem;text-align:center;transition:all .15s;min-width:80px}
 .doc-btn.selected{border-color:var(--azul);background:var(--azul-clar);color:var(--azul)}
@@ -605,10 +609,11 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
         </div>
       </div>
       <div class="fg full">
-        <label>Foto del Trabajo Terminado *</label>
-        <input type="file" id="c-foto" accept="image/*" capture="environment" onchange="previewFoto(this)">
-        <img id="foto-preview" class="foto-preview" alt="Preview" onclick="abrirLightbox(this.src,'Vista previa')">
+        <label>Fotos del Trabajo Terminado * <span style="font-weight:400;color:var(--gris);font-size:.78rem">(mínimo 1, puedes agregar más)</span></label>
+        <input type="file" id="c-foto" accept="image/*" capture="environment" onchange="agregarFoto(this)">
+        <div id="fotos-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
         <div id="foto-status" style="font-size:.78rem;color:var(--gris);margin-top:4px;"></div>
+        <button type="button" class="btn btn-sm" id="btn-add-foto" style="display:none;margin-top:8px;background:#eff6ff;color:#1d4ed8" onclick="document.getElementById('c-foto').click()">📷 + Agregar otra foto</button>
       </div>
       <div class="fg full" id="valor-cobrado-box">
         <label>&#128176; Valor Cobrado al Cliente (CLP) *</label>
@@ -1061,7 +1066,7 @@ const storage=getStorage(app);
 
 let trabajos={},tecnicos=[],stockData={},histData={};
 let tecActivo=null,editId=null,completarId=null;
-let docSel=null,fotoB64=null;
+let docSel=null,fotosB64=[];
 let vista="admin",stockPage=0;
 const PER_PAGE=50;
 let importData=[];
@@ -1269,6 +1274,17 @@ function renderTHFiltro(){
   sel.innerHTML='<option value="">Todos</option>'+tecnicos.map(t=>`<option value="${t.nombre}">${t.nombre}</option>`).join("");
   sel.value=v;
 }
+function galeriaFotosHTML(t){
+  const fotos = (t.fotos && t.fotos.length) ? t.fotos : (t.fotoUrl ? [t.fotoUrl] : []);
+  if(!fotos.length) return `<div style="font-size:.82rem;color:var(--gris);font-style:italic">Sin foto registrada</div>`;
+  if(fotos.length === 1){
+    return `<img src="${fotos[0]}" class="trab-foto" onclick="abrirLightbox('${fotos[0]}','${t.cliente} — ${t.completadoEn||''}')" alt="foto">`;
+  }
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+    ${fotos.map((url,i)=>`<img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer;border:1.5px solid var(--borde)" onclick="abrirLightbox('${url}','${t.cliente} — Foto ${i+1}')" alt="foto ${i+1}">`).join("")}
+  </div>
+  <div style="font-size:.75rem;color:var(--gris);margin-top:3px">📷 ${fotos.length} fotos</div>`;
+}
 function renderAdmin(){
   renderKPIs();
   const filE=document.getElementById("fil-estado").value;
@@ -1452,7 +1468,7 @@ window.abrirCompletar=function(id){
   document.getElementById("c-servicio").value=t.tipo||"";
   document.getElementById("c-obs").value="";
   document.getElementById("c-vidrio-info").textContent="";
-  docSel=null;fotoB64=null;
+  docSel=null;fotosB64=[];
   document.querySelectorAll(".doc-btn").forEach(b=>b.classList.remove("selected"));
   document.getElementById("foto-preview").style.display="none";
   document.getElementById("foto-status").textContent="";
@@ -1468,6 +1484,10 @@ window.abrirCompletar=function(id){
   if(mAviso) mAviso.style.display="none";
   const vBox=document.getElementById("valor-cobrado-box");
   if(vBox) vBox.style.display="block";
+  const fgrid=document.getElementById("fotos-grid");
+  if(fgrid) fgrid.innerHTML="";
+  const addBtn=document.getElementById("btn-add-foto");
+  if(addBtn) addBtn.style.display="none";
   document.getElementById("modal-completar").classList.add("open");
 };
 window.closeCompletar=function(){document.getElementById("modal-completar").classList.remove("open");completarId=null;};
@@ -1491,31 +1511,68 @@ window.selecDoc=function(tipo){
     if(valorBox) valorBox.style.display = "block";
   }
 };
-window.previewFoto=function(input){
-  const file=input.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    // Comprimir imagen antes de guardar
-    const img=new Image();
-    img.onload=()=>{
-      const canvas=document.createElement("canvas");
-      const MAX=1200; // max dimension
-      let w=img.width,h=img.height;
-      if(w>MAX||h>MAX){
-        if(w>h){h=Math.round(h*MAX/w);w=MAX;}
-        else{w=Math.round(w*MAX/h);h=MAX;}
-      }
-      canvas.width=w;canvas.height=h;
-      canvas.getContext("2d").drawImage(img,0,0,w,h);
-      fotoB64=canvas.toDataURL("image/jpeg",0.75); // 75% calidad
-      const prev=document.getElementById("foto-preview");
-      prev.src=fotoB64;prev.style.display="block";
-      const kb=Math.round(fotoB64.length*0.75/1024);
-      document.getElementById("foto-status").textContent=`✅ Foto lista (~${kb} KB comprimida)`;
+function comprimirImagen(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement("canvas");
+        const MAX=1200;
+        let w=img.width,h=img.height;
+        if(w>MAX||h>MAX){
+          if(w>h){h=Math.round(h*MAX/w);w=MAX;}
+          else{w=Math.round(w*MAX/h);h=MAX;}
+        }
+        canvas.width=w;canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/jpeg",0.75));
+      };
+      img.onerror=reject;
+      img.src=e.target.result;
     };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFotosGrid(){
+  const grid=document.getElementById("fotos-grid");
+  if(!grid) return;
+  grid.innerHTML = fotosB64.map((b64,i)=>`
+    <div class="foto-thumb-wrap">
+      <img src="${b64}" onclick="abrirLightbox('${b64}','Foto ${i+1}')">
+      ${i===0?'<span class="foto-thumb-badge">Principal</span>':""}
+      <button type="button" class="foto-thumb-remove" onclick="quitarFoto(${i})">&#10005;</button>
+    </div>`).join("");
+  const addBtn=document.getElementById("btn-add-foto");
+  if(addBtn) addBtn.style.display = fotosB64.length ? "inline-block" : "none";
+  const status=document.getElementById("foto-status");
+  if(status){
+    status.textContent = fotosB64.length
+      ? `✅ ${fotosB64.length} foto${fotosB64.length>1?"s":""} lista${fotosB64.length>1?"s":""}`
+      : "";
+  }
+}
+
+window.agregarFoto=async function(input){
+  const file=input.files[0];
+  if(!file) return;
+  const status=document.getElementById("foto-status");
+  if(status) status.textContent="⏳ Procesando foto...";
+  try{
+    const b64=await comprimirImagen(file);
+    fotosB64.push(b64);
+    renderFotosGrid();
+  }catch(e){
+    alert("No se pudo procesar la foto, intenta de nuevo");
+  }
+  input.value=""; // permitir volver a elegir la misma foto si se desea
+};
+
+window.quitarFoto=function(i){
+  fotosB64.splice(i,1);
+  renderFotosGrid();
 };
 window.confirmarCompletar=async function(){
   const cliente=document.getElementById("c-cliente").value.trim();
@@ -1533,33 +1590,34 @@ window.confirmarCompletar=async function(){
   const esMerma = docSel === "merma";
   const valorCobrado = esMerma ? 0 : (parseFloat(document.getElementById("c-valor")?.value)||0);
   if(!esMerma && valorCobrado <= 0){alert("⚠️ Ingresa el valor cobrado al cliente");return;}
-  if(!fotoB64){alert("⚠️ Debes tomar una foto del trabajo terminado");return;}
+  if(!fotosB64.length){alert("⚠️ Debes tomar al menos una foto del trabajo terminado");return;}
   const btn=document.getElementById("btn-confirmar");
   btn.textContent="⏳ Guardando...";btn.disabled=true;
   try{
-    // Ejecutar subida de foto y descuento de stock en paralelo
-    let fotoUrl=fotoB64;
+    // Ejecutar subida de TODAS las fotos y descuento de stock en paralelo
+    let fotosUrls=fotosB64.slice(); // fallback: si falla la subida, usa el base64 local
     const stockEntry=Object.entries(stockData).find(([,v])=>v.codigo===codigoVidrio);
-    const [fotoResult] = await Promise.allSettled([
-      // Subir foto
-      (async()=>{
-        const fr=sRef(storage,`fotos/${completarId}_${Date.now()}.jpg`);
-        await uploadString(fr,fotoB64,"data_url");
-        fotoUrl=await getDownloadURL(fr);
-      })(),
+    const subidas = fotosB64.map((b64,i) => (async()=>{
+      const fr=sRef(storage,`fotos/${completarId}_${Date.now()}_${i}.jpg`);
+      await uploadString(fr,b64,"data_url");
+      fotosUrls[i]=await getDownloadURL(fr);
+    })());
+    const resultados = await Promise.allSettled([
+      ...subidas,
       // Descontar stock en paralelo
       stockEntry
         ? update(ref(db,`stock/${stockEntry[0]}`),{cantidad:Math.max(0,(stockEntry[1].cantidad||0)-1),ultimoMovimiento:ahora()})
         : Promise.resolve()
     ]);
-    if(fotoResult.status==="rejected") console.warn("Storage:",fotoResult.reason);
+    resultados.forEach(r => { if(r.status==="rejected") console.warn("Storage:",r.reason); });
+    const fotoUrl = fotosUrls[0]; // compatibilidad con trabajos antiguos (portada)
     // Obtener costo del producto desde el inventario
     const costoProducto = stockEntry ? (Number(stockEntry[1].precio)||0) : 0;
     const ganancia = valorCobrado - costoProducto;
 
     await update(ref(db,`trabajos/${completarId}`),{
       estado:"completado",cliente,telefono,tipo:servicio,
-      documento:docSel,codigoVidrio,obs,fotoUrl,
+      documento:docSel,codigoVidrio,obs,fotoUrl,fotos:fotosUrls,
       rut:document.getElementById("c-rut")?.value.trim()||null,
       valorCobrado, costoProducto, ganancia, esMerma,
       completadoEn:ahora(),completadoPor:tecActivo
@@ -1917,9 +1975,7 @@ function renderTrabajosHist(){
           ${t.rut?`<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-weight:600">🪪 RUT: ${t.rut}</span>`:""}
         </div>
         ${t.obs?`<div style="font-size:.82rem;color:#6b7280;margin-bottom:8px">💬 ${t.obs}</div>`:""}
-        ${t.fotoUrl
-          ?`<img src="${t.fotoUrl}" class="trab-foto" onclick="abrirLightbox('${t.fotoUrl}','${t.cliente} — ${t.completadoEn||''}')" alt="foto">`
-          :`<div style="font-size:.82rem;color:var(--gris);font-style:italic">Sin foto registrada</div>`}
+        ${galeriaFotosHTML(t)}
       ${modoUsuario === "admin" ? adminEstadoBtns(t.id) : ""}
       </div>
     </div>`).join("");
