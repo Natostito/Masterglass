@@ -878,6 +878,41 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
   </div>
 </div>
 
+<!-- MODAL REASIGNAR FLOTANTE -->
+<div class="modal-overlay" id="modal-reasignar">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <h2>&#128260; Reasignar Artículo</h2>
+      <button class="close-btn" onclick="closeReasignarModal()">&#10005;</button>
+    </div>
+    <p style="font-size:.84rem;color:var(--gris);margin-bottom:14px;">
+      Cambia el técnico responsable de este artículo flotante.
+    </p>
+    <div class="form-grid">
+      <div class="fg full">
+        <label>Producto</label>
+        <input type="text" id="rea-producto" readonly style="background:#f9fafb;font-weight:600">
+      </div>
+      <div class="fg full">
+        <label>Técnico actual</label>
+        <input type="text" id="rea-actual" readonly style="background:#f9fafb;color:var(--gris)">
+      </div>
+      <div class="fg full">
+        <label>Nuevo técnico responsable *</label>
+        <select id="rea-nuevo-tecnico"></select>
+      </div>
+      <div class="fg full">
+        <label>Motivo (opcional)</label>
+        <input type="text" id="rea-motivo" placeholder="Ej: Cambio de turno, técnico no lo necesitaba...">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn" style="background:#e5e7eb;color:#374151" onclick="closeReasignarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-reasignar" onclick="confirmarReasignar()">&#128260; Confirmar Reasignación</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DEVOLVER A BODEGA -->
 <div class="modal-overlay" id="modal-bodega">
   <div class="modal" style="max-width:480px">
@@ -2686,6 +2721,7 @@ window.renderFlotantes = function renderFlotantes() {
           <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="marcarFlotanteDevueltoProveedor('${fl.id}','${fl.codigo}','${fl.tecnico}')">🏭 Dev. Proveedor</button>
           <button class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="devolverABodega('${fl.id}','${fl.codigo}','${fl.tecnico}')">📦 A Bodega</button>
           <button class="btn btn-sm" style="background:#ede9fe;color:#7c3aed" onclick="marcarFlotanteMerma('${fl.id}','${fl.codigo}','${fl.tecnico}')">🚫 Merma</button>
+          <button class="btn btn-sm" style="background:#e0f2fe;color:#0369a1" onclick="reasignarFlotante('${fl.id}','${fl.codigo}','${fl.tecnico}')">🔄 Reasignar</button>
           <button class="btn btn-sm btn-danger" onclick="eliminarFlotante('${fl.id}')">🗑</button>
         </div>`:""}
       </div>`;
@@ -2796,6 +2832,63 @@ window.marcarFlotanteMerma = function(id, codigo, tecnico) {
   info.style.background = "#f0fdf4"; info.style.color = "var(--verde)";
   info.style.display = "block";
   document.getElementById("modal-merma").classList.add("open");
+};
+
+let reasignarFlotanteId = null;
+
+window.reasignarFlotante = function(id, codigo, tecnico) {
+  reasignarFlotanteId = id;
+  const fl = flotantesData[id];
+  document.getElementById("rea-producto").value = `${codigo} — ${fl?.descripcion||""}`;
+  document.getElementById("rea-actual").value = tecnico || "—";
+  document.getElementById("rea-motivo").value = "";
+  const sel = document.getElementById("rea-nuevo-tecnico");
+  sel.innerHTML = tecnicos
+    .filter(t => t.nombre !== tecnico) // no mostrar el técnico actual como opción
+    .map(t => `<option value="${t.nombre}">${t.nombre}</option>`).join("");
+  const btn = document.getElementById("btn-reasignar");
+  btn.disabled = false; btn.textContent = "🔄 Confirmar Reasignación";
+  document.getElementById("modal-reasignar").classList.add("open");
+};
+
+window.closeReasignarModal = function() {
+  document.getElementById("modal-reasignar").classList.remove("open");
+  reasignarFlotanteId = null;
+};
+
+window.confirmarReasignar = async function() {
+  if (!reasignarFlotanteId) return;
+  const fl = flotantesData[reasignarFlotanteId];
+  const tecnicoAnterior = fl?.tecnico || "—";
+  const nuevoTecnico = document.getElementById("rea-nuevo-tecnico").value;
+  const motivo = document.getElementById("rea-motivo").value.trim();
+
+  if (!nuevoTecnico) { alert("⚠️ Selecciona el nuevo técnico responsable"); return; }
+
+  const btn = document.getElementById("btn-reasignar");
+  btn.disabled = true; btn.textContent = "⏳ Guardando...";
+
+  try {
+    await update(ref(db, `flotantes/${reasignarFlotanteId}`), {
+      tecnico: nuevoTecnico,
+      fecha: hoy(), // reinicia el contador de días en camioneta con el nuevo responsable
+    });
+
+    await push(ref(db, "historial"), {
+      tipo: "flotante-reasignado",
+      codigo: fl?.codigo || "",
+      cantidad: fl?.cantidad || 1,
+      descripcion: `Reasignado: ${tecnicoAnterior} → ${nuevoTecnico}${motivo?" — "+motivo:""}`,
+      tecnico: nuevoTecnico,
+      fecha: hoy(), fechaHora: ahora(),
+    });
+
+    toast(`🔄 Reasignado a ${nuevoTecnico}`);
+    closeReasignarModal();
+  } catch(e) {
+    alert("Error: " + e.message);
+    btn.disabled = false; btn.textContent = "🔄 Confirmar Reasignación";
+  }
 };
 
 window.devolverABodega = function(id, codigo, tecnico) {
@@ -3654,6 +3747,7 @@ window.borrarTodoElStock=async function(){
             '<button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="marcarFlotanteDevueltoProveedor(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🏭 Dev. Proveedor</button>' +
             '<button class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="devolverABodega(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">📦 A Bodega</button>' +
             '<button class="btn btn-sm" style="background:#ede9fe;color:#7c3aed" onclick="marcarFlotanteMerma(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🚫 Merma</button>' +
+            '<button class="btn btn-sm" style="background:#e0f2fe;color:#0369a1" onclick="reasignarFlotante(\''+fl.id+'\',\''+fl.codigo+'\',\''+fl.tecnico+'\')">🔄 Reasignar</button>' +
             '<button class="btn btn-sm btn-danger" onclick="eliminarFlotante(\''+fl.id+'\')">🗑</button>' +
             '</div>' : '') +
           '</div>';
