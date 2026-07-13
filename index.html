@@ -611,9 +611,13 @@ input[type=password]::-webkit-inner-spin-button{-webkit-appearance:none}
       <div class="fg full">
         <label>Fotos del Trabajo Terminado * <span style="font-weight:400;color:var(--gris);font-size:.78rem">(mínimo 1, puedes agregar más)</span></label>
         <input type="file" id="c-foto" accept="image/*" capture="environment" onchange="agregarFoto(this)">
+        <input type="file" id="c-foto-extra" accept="image/*" multiple style="display:none" onchange="agregarFotos(this)">
         <div id="fotos-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
         <div id="foto-status" style="font-size:.78rem;color:var(--gris);margin-top:4px;"></div>
-        <button type="button" class="btn btn-sm" id="btn-add-foto" style="display:none;margin-top:8px;background:#eff6ff;color:#1d4ed8" onclick="document.getElementById('c-foto').click()">📷 + Agregar otra foto</button>
+        <div id="botones-add-foto" style="display:none;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-sm" style="background:#eff6ff;color:#1d4ed8" onclick="document.getElementById('c-foto').click()">📷 Tomar otra foto</button>
+          <button type="button" class="btn btn-sm" style="background:#f0fdf4;color:var(--verde)" onclick="document.getElementById('c-foto-extra').click()">🖼️ Elegir de galería</button>
+        </div>
       </div>
       <div class="fg full" id="valor-cobrado-box">
         <label>&#128176; Valor Cobrado al Cliente (CLP) *</label>
@@ -1470,7 +1474,6 @@ window.abrirCompletar=function(id){
   document.getElementById("c-vidrio-info").textContent="";
   docSel=null;fotosB64=[];
   document.querySelectorAll(".doc-btn").forEach(b=>b.classList.remove("selected"));
-  document.getElementById("foto-preview").style.display="none";
   document.getElementById("foto-status").textContent="";
   document.getElementById("btn-confirmar").disabled=false;
   document.getElementById("btn-confirmar").textContent="✅ Confirmar y Completar";
@@ -1486,8 +1489,8 @@ window.abrirCompletar=function(id){
   if(vBox) vBox.style.display="block";
   const fgrid=document.getElementById("fotos-grid");
   if(fgrid) fgrid.innerHTML="";
-  const addBtn=document.getElementById("btn-add-foto");
-  if(addBtn) addBtn.style.display="none";
+  const addBtns=document.getElementById("botones-add-foto");
+  if(addBtns) addBtns.style.display="none";
   document.getElementById("modal-completar").classList.add("open");
 };
 window.closeCompletar=function(){document.getElementById("modal-completar").classList.remove("open");completarId=null;};
@@ -1545,8 +1548,8 @@ function renderFotosGrid(){
       ${i===0?'<span class="foto-thumb-badge">Principal</span>':""}
       <button type="button" class="foto-thumb-remove" onclick="quitarFoto(${i})">&#10005;</button>
     </div>`).join("");
-  const addBtn=document.getElementById("btn-add-foto");
-  if(addBtn) addBtn.style.display = fotosB64.length ? "inline-block" : "none";
+  const addBtns=document.getElementById("botones-add-foto");
+  if(addBtns) addBtns.style.display = fotosB64.length ? "flex" : "none";
   const status=document.getElementById("foto-status");
   if(status){
     status.textContent = fotosB64.length
@@ -1568,6 +1571,21 @@ window.agregarFoto=async function(input){
     alert("No se pudo procesar la foto, intenta de nuevo");
   }
   input.value=""; // permitir volver a elegir la misma foto si se desea
+};
+
+window.agregarFotos=async function(input){
+  const files=Array.from(input.files||[]);
+  if(!files.length) return;
+  const status=document.getElementById("foto-status");
+  if(status) status.textContent=`⏳ Procesando ${files.length} foto${files.length>1?"s":""}...`;
+  try{
+    const comprimidas=await Promise.all(files.map(f=>comprimirImagen(f).catch(()=>null)));
+    comprimidas.forEach(b64=>{ if(b64) fotosB64.push(b64); });
+    renderFotosGrid();
+  }catch(e){
+    alert("No se pudieron procesar algunas fotos, intenta de nuevo");
+  }
+  input.value="";
 };
 
 window.quitarFoto=function(i){
