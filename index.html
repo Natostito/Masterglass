@@ -1320,7 +1320,7 @@ function renderAdmin(){
           ${t.documento?`<span>📄 ${t.documento}</span>`:""} ${t.rut?`<span style="font-size:.8rem;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-weight:600">🪪 ${t.rut}</span>`:""}
         </div>
         ${t.obs?`<div style="margin-top:4px;font-size:.8rem;color:#6b7280;margin-bottom:8px">💬 ${t.obs}</div>`:""}
-        ${t.fotoUrl?`<img src="${t.fotoUrl}" class="trab-foto" onclick="abrirLightbox('${t.fotoUrl}','${t.cliente}')" alt="foto">` :""}
+        ${galeriaFotosHTML(t)}
         <div class="job-actions" style="margin-top:10px">
           <button class="btn btn-sm btn-primary" onclick="openModal('${t.id}')">✏️ Editar</button>
           ${t.estado!=="completado"&&t.estado!=="cancelado"?`
